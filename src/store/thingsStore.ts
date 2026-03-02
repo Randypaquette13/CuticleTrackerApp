@@ -27,6 +27,7 @@ interface ThingsState {
 
   // Tracking
   markTracked: (id: string) => void;
+  clearLastTracked: (id: string) => void;
   getLastTracked: (id: string) => string | undefined;
 }
 
@@ -116,6 +117,12 @@ export const useThingsStore = create<ThingsState>()(
         set((state) => ({
           lastTracked: { ...state.lastTracked, [id]: new Date().toISOString() },
         })),
+
+      clearLastTracked: (id) =>
+        set((state) => {
+          const { [id]: _, ...rest } = state.lastTracked;
+          return { lastTracked: rest };
+        }),
 
       getLastTracked: (id) => get().lastTracked[id],
     }),

@@ -8,16 +8,19 @@ import {
   ScrollView,
   Alert,
   FlatList,
+  Keyboard,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThingsStore } from '../../src/store/thingsStore';
+import TimePickerField from '../../src/components/TimePickerField';
 import { rescheduleAllNotifications } from '../../src/utils/notifications';
+import { deletePhoto } from '../../src/utils/photos';
 
 export default function EditGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { groups, things, updateGroup, deleteGroup, lastTracked } = useThingsStore();
+  const { groups, things, updateGroup, updateThing, deleteGroup, clearLastTracked, lastTracked } = useThingsStore();
 
   const group = groups.find((g) => g.id === id);
 
@@ -74,6 +77,43 @@ export default function EditGroupScreen() {
     router.back();
   };
 
+  const membersWithPhotos = things.filter(
+    (t) => group.thingIds.includes(t.id) && t.photographs.length > 0
+  );
+  const totalPhotosInGroup = membersWithPhotos.reduce(
+    (sum, t) => sum + t.photographs.length,
+    0
+  );
+
+  const handleDeleteAllPhotos = () => {
+    if (totalPhotosInGroup === 0) return;
+    Alert.alert(
+      'Delete All Pictures',
+      `Remove all ${totalPhotosInGroup} photo(s) from every member of "${group.displayName}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            for (const thing of membersWithPhotos) {
+              for (const photo of thing.photographs) {
+                await deletePhoto(photo.uri);
+              }
+              updateThing(thing.id, { photographs: [] });
+            }
+            clearLastTracked(id);
+            rescheduleAllNotifications(
+              useThingsStore.getState().things,
+              useThingsStore.getState().groups,
+              useThingsStore.getState().lastTracked
+            );
+          },
+        },
+      ]
+    );
+  };
+
   const handleDelete = () => {
     Alert.alert(
       'Delete Group',
@@ -104,7 +144,7 @@ export default function EditGroupScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.form}>
+      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
         <Text style={styles.label}>Group Name</Text>
         <TextInput
           style={styles.input}
@@ -112,16 +152,15 @@ export default function EditGroupScreen() {
           onChangeText={setName}
           placeholder="e.g. All Fingers"
           placeholderTextColor="#555"
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
         />
 
-        <Text style={styles.label}>Reminder Time (HH:MM)</Text>
-        <TextInput
-          style={styles.input}
+        <TimePickerField
+          label="Reminder Time"
           value={reminderTime}
-          onChangeText={setReminderTime}
-          placeholder="20:00"
-          placeholderTextColor="#555"
-          keyboardType="numbers-and-punctuation"
+          onValueChange={setReminderTime}
+          inputStyle={styles.input}
         />
 
         <Text style={styles.label}>Interval (days)</Text>
@@ -132,9 +171,18 @@ export default function EditGroupScreen() {
           keyboardType="number-pad"
           placeholder="1"
           placeholderTextColor="#555"
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
+          selectTextOnFocus
         />
 
         {/* Members */}
+        {totalPhotosInGroup > 0 && (
+          <TouchableOpacity style={styles.deletePhotosBtn} onPress={handleDeleteAllPhotos}>
+            <Text style={styles.deletePhotosBtnText}>🗑  Delete all pictures (from all members)</Text>
+          </TouchableOpacity>
+        )}
+
         <Text style={[styles.label, { marginTop: 20 }]}>Members</Text>
         <Text style={styles.hint}>Select the trackers in this group.</Text>
 
@@ -232,6 +280,15 @@ const styles = StyleSheet.create({
   memberName: { color: '#e2e2e8', fontSize: 15, flex: 1 },
   memberNameDisabled: { color: '#888' },
   inGroupLabel: { color: '#666', fontSize: 12 },
+  deletePhotosBtn: {
+    backgroundColor: '#2a1a1a',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4a2a2a',
+  },
+  deletePhotosBtnText: { color: '#ff8a80', fontSize: 14, fontWeight: '600' },
   deleteBtn: {
     marginTop: 32,
     backgroundColor: '#3a1a1a',

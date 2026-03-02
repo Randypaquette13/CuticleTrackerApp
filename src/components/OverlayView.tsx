@@ -19,7 +19,7 @@ export default function OverlayView({ overlay, width, height, opacity = 1 }: Pro
   const scaleY = height / overlay.canvasHeight;
 
   return (
-    <Canvas style={[styles.canvas, { width, height, opacity }]}>
+    <Canvas style={[styles.canvas, { width, height, opacity }]} pointerEvents="none">
       {overlay.strokes.map((stroke) => {
         const skiaPath = Skia.Path.MakeFromSVGString(stroke.path);
         if (!skiaPath) return null;

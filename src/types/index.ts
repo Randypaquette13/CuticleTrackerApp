@@ -31,6 +31,8 @@ export interface ThingToTrack {
   photographs: Photo[];
   /** Set when this item belongs to a group */
   groupId?: string;
+  /** 0–1 zoom level used when taking photos for this tracker (set on initial photo, reused for track) */
+  savedZoom?: number;
 }
 
 export interface ThingToTrackGroup {

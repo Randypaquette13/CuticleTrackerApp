@@ -11,9 +11,8 @@ import {
 import { useRouter } from 'expo-router';
 import { ThingToTrack } from '../types';
 import OverlayView from './OverlayView';
-import { daysUntilNext, canTrackThing } from '../utils/tracking';
+import { daysUntilNext } from '../utils/tracking';
 import { useThingsStore } from '../store/thingsStore';
-import { useSettingsStore } from '../store/settingsStore';
 
 const CARD_SIZE = 150;
 
@@ -32,11 +31,8 @@ export default function ThingCard({
 }: Props) {
   const router = useRouter();
   const { lastTracked } = useThingsStore();
-  const { earlyTrackingWindowHours } = useSettingsStore();
 
-  const last = lastTracked[thing.id];
-  const daysLeft = daysUntilNext(thing.reminderTime, thing.intervalDays, last);
-  const canTrack = canTrackThing(thing, earlyTrackingWindowHours, last);
+  const daysLeft = daysUntilNext(thing.reminderTime, thing.intervalDays, lastTracked[thing.id]);
 
   const handlePress = () => {
     if (isSelectMode) {
@@ -53,36 +49,15 @@ export default function ThingCard({
           title: thing.displayName,
         },
         (idx) => {
-          if (idx === 0 && canTrack)
-            router.push(`/track-thing/${thing.id}`);
-          else if (idx === 0)
-            Alert.alert(
-              'Not yet',
-              `You can track ${thing.displayName} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`
-            );
-          else if (idx === 1)
-            router.push(`/slideshow/${thing.id}`);
-          else if (idx === 2)
-            router.push(`/edit-thing/${thing.id}`);
+          if (idx === 0) router.push(`/track-thing/${thing.id}`);
+          else if (idx === 1) router.push(`/slideshow/${thing.id}`);
+          else if (idx === 2) router.push(`/edit-thing/${thing.id}`);
         }
       );
     } else {
       Alert.alert(thing.displayName, undefined, [
-        {
-          text: 'Track',
-          onPress: () => {
-            if (canTrack) router.push(`/track-thing/${thing.id}`);
-            else
-              Alert.alert(
-                'Not yet',
-                `You can track in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`
-              );
-          },
-        },
-        {
-          text: 'View Slideshow',
-          onPress: () => router.push(`/slideshow/${thing.id}`),
-        },
+        { text: 'Track', onPress: () => router.push(`/track-thing/${thing.id}`) },
+        { text: 'View Slideshow', onPress: () => router.push(`/slideshow/${thing.id}`) },
         { text: 'Edit', onPress: () => router.push(`/edit-thing/${thing.id}`) },
         { text: 'Cancel', style: 'cancel' },
       ]);

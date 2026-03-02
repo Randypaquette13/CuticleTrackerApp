@@ -54,20 +54,48 @@ export function canTrackNow(
   return now >= windowStart;
 }
 
+/** If there are no photos, user can always track. Otherwise use interval + early window. */
 export function canTrackThing(
   thing: ThingToTrack,
   earlyWindowHours: number,
   lastTrackedISO?: string
 ): boolean {
+  if (thing.photographs.length === 0) return true;
   return canTrackNow(thing.reminderTime, thing.intervalDays, earlyWindowHours, lastTrackedISO);
 }
 
+/** If all members have no photos, user can always track the group. Otherwise use interval + early window. */
 export function canTrackGroup(
   group: ThingToTrackGroup,
   earlyWindowHours: number,
-  lastTrackedISO?: string
+  lastTrackedISO: string | undefined,
+  memberThings: ThingToTrack[]
 ): boolean {
+  const hasNoPhotos = memberThings.every((t) => t.photographs.length === 0);
+  if (hasNoPhotos) return true;
   return canTrackNow(group.reminderTime, group.intervalDays, earlyWindowHours, lastTrackedISO);
+}
+
+/** Human-readable next track date/time, e.g. "Mar 5 at 8:00 PM". */
+export function formatNextTrackDate(
+  reminderTime: string,
+  intervalDays: number,
+  lastTrackedISO?: string
+): string {
+  const d = getNextTrackDate(reminderTime, intervalDays, lastTrackedISO);
+  const [hours, minutes] = reminderTime.split(':').map(Number);
+  const timeStr = `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`;
+  const dateStr = d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+  });
+  const today = new Date();
+  const isToday =
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear();
+  return isToday ? `Today at ${timeStr}` : `${dateStr} at ${timeStr}`;
 }
 
 /** Whether a tracker has been tracked within its current interval. */

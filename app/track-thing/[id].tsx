@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,15 @@ import { rescheduleAllNotifications } from '../../src/utils/notifications';
 export default function TrackThingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { things, addPhotoToThing, markTracked, groups, lastTracked } = useThingsStore();
+  const { things, addPhotoToThing, updateThing, markTracked, groups, lastTracked } = useThingsStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [saving, setSaving] = useState(false);
-
   const thing = things.find((t) => t.id === id);
+  const [zoom, setZoom] = useState(thing?.savedZoom ?? 0);
+
+  useEffect(() => {
+    setZoom(thing?.savedZoom ?? 0);
+  }, [thing?.id, thing?.savedZoom]);
 
   const handleCapture = async (photo: CameraCapturedPicture) => {
     if (saving || !thing) return;
@@ -29,6 +33,7 @@ export default function TrackThingScreen() {
     try {
       const saved = await savePhoto(photo.uri, id);
       addPhotoToThing(id, saved);
+      updateThing(id, { savedZoom: zoom });
       markTracked(id);
       await rescheduleAllNotifications(
         useThingsStore.getState().things,
@@ -58,7 +63,14 @@ export default function TrackThingScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraWithOverlay onCapture={handleCapture} overlay={thing?.overlay} />
+      <CameraWithOverlay
+        onCapture={handleCapture}
+        overlay={thing?.overlay}
+        zoom={zoom}
+        onZoomChange={setZoom}
+        disabled={saving}
+        zoomLocked={(thing?.photographs.length ?? 0) > 0}
+      />
 
       <SafeAreaView style={styles.headerOverlay} edges={['top']}>
         <View style={styles.header}>

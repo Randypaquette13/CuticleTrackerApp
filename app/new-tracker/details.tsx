@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThingsStore } from '../../src/store/thingsStore';
 import { ThingToTrack } from '../../src/types';
+import TimePickerField from '../../src/components/TimePickerField';
 
 export default function NewTrackerDetails() {
   const router = useRouter();
@@ -68,7 +70,7 @@ export default function NewTrackerDetails() {
       {/* Step indicator */}
       <StepIndicator current={1} total={3} />
 
-      <ScrollView contentContainerStyle={styles.form}>
+      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
         <Text style={styles.stepTitle}>Step 1: Details</Text>
         <Text style={styles.stepDesc}>
           Give your tracker a name and set your preferred reminder schedule.
@@ -82,17 +84,15 @@ export default function NewTrackerDetails() {
           placeholder="e.g. Left Index Finger"
           placeholderTextColor="#555"
           autoFocus
-          returnKeyType="next"
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
         />
 
-        <Text style={styles.label}>Reminder Time (24-hr HH:MM)</Text>
-        <TextInput
-          style={styles.input}
+        <TimePickerField
+          label="Reminder Time"
           value={reminderTime}
-          onChangeText={setReminderTime}
-          placeholder="20:00"
-          placeholderTextColor="#555"
-          keyboardType="numbers-and-punctuation"
+          onValueChange={setReminderTime}
+          inputStyle={styles.input}
         />
 
         <Text style={styles.label}>Tracking Interval (days)</Text>
@@ -103,6 +103,9 @@ export default function NewTrackerDetails() {
           keyboardType="number-pad"
           placeholder="1"
           placeholderTextColor="#555"
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
+          selectTextOnFocus
         />
         <Text style={styles.hint}>
           How many days between tracking sessions. Use 1 for daily.

@@ -16,9 +16,10 @@ import { savePhoto } from '../../src/utils/photos';
 export default function NewTrackerPhoto() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { addPhotoToThing, things } = useThingsStore();
+  const { addPhotoToThing, updateThing, things } = useThingsStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [saving, setSaving] = useState(false);
+  const [zoom, setZoom] = useState(0);
 
   const thing = things.find((t) => t.id === id);
 
@@ -28,6 +29,7 @@ export default function NewTrackerPhoto() {
     try {
       const saved = await savePhoto(photo.uri, id);
       addPhotoToThing(id, saved);
+      updateThing(id, { savedZoom: zoom });
       router.push({
         pathname: '/draw-overlay/[id]',
         params: { id, fromNewTracker: 'true' },
@@ -57,7 +59,13 @@ export default function NewTrackerPhoto() {
 
   return (
     <View style={styles.container}>
-      <CameraWithOverlay onCapture={handleCapture} overlay={thing?.overlay} />
+      <CameraWithOverlay
+        onCapture={handleCapture}
+        overlay={thing?.overlay}
+        zoom={zoom}
+        onZoomChange={setZoom}
+        disabled={saving}
+      />
 
       {/* Header overlay */}
       <SafeAreaView style={styles.headerOverlay} edges={['top']}>

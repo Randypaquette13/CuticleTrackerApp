@@ -8,7 +8,6 @@ import {
   Modal,
   FlatList,
   Pressable,
-  Animated,
   Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -46,10 +45,8 @@ export default function SlideshowScreen() {
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Clear timer on unmount or when playing state changes
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -60,40 +57,33 @@ export default function SlideshowScreen() {
     if (timerRef.current) clearInterval(timerRef.current);
     if (!isPlaying || photos.length <= 1) return;
     timerRef.current = setInterval(() => {
-      crossFadeTo((prev) => (prev + 1) % photos.length);
+      setCurrentIdx((prev) => (prev + 1) % photos.length);
     }, slideshowSpeedSeconds * 1000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isPlaying, photos.length, slideshowSpeedSeconds]);
 
-  const crossFadeTo = (getNext: (prev: number) => number) => {
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentIdx((prev) => {
-        const next = getNext(prev);
-        return next;
-      });
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    });
-  };
-
-  const goNext = () => crossFadeTo((p) => (p + 1) % photos.length);
-  const goPrev = () => crossFadeTo((p) => (p - 1 + photos.length) % photos.length);
+  const goNext = () => setCurrentIdx((p) => (p + 1) % photos.length);
+  const goPrev = () => setCurrentIdx((p) => (p - 1 + photos.length) % photos.length);
 
   const currentPhoto = photos[currentIdx];
+
+  // If more than one photo was taken on the same calendar date, show time too
+  const dateOnly = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  };
+  const countOnSameDate = currentPhoto
+    ? photos.filter((p) => dateOnly(p.capturedAt) === dateOnly(currentPhoto.capturedAt)).length
+    : 0;
+  const showTime = countOnSameDate > 1;
   const formattedDate = currentPhoto
-    ? new Date(currentPhoto.capturedAt).toLocaleDateString(undefined, {
+    ? new Date(currentPhoto.capturedAt).toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
+        ...(showTime ? { hour: 'numeric', minute: '2-digit' } : {}),
       })
     : '';
 
@@ -128,13 +118,13 @@ export default function SlideshowScreen() {
             onPress={() => setIsPlaying((p) => !p)}
             activeOpacity={1}
           >
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
+            <View style={StyleSheet.absoluteFill}>
               <Image
                 source={{ uri: currentPhoto?.uri }}
                 style={StyleSheet.absoluteFill}
                 resizeMode="contain"
               />
-            </Animated.View>
+            </View>
 
             {/* Date overlay */}
             {slideshowShowDate && currentPhoto && (

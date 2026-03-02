@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   ScrollView,
   TextInput,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSettingsStore } from '../store/settingsStore';
 
@@ -19,6 +21,27 @@ interface Props {
 
 export default function SettingsModal({ visible, onClose }: Props) {
   const settings = useSettingsStore();
+  const [earlyHoursStr, setEarlyHoursStr] = useState(String(settings.earlyTrackingWindowHours));
+  const [slideshowSpeedStr, setSlideshowSpeedStr] = useState(String(settings.slideshowSpeedSeconds));
+
+  useEffect(() => {
+    if (visible) {
+      setEarlyHoursStr(String(settings.earlyTrackingWindowHours));
+      setSlideshowSpeedStr(String(settings.slideshowSpeedSeconds));
+    }
+  }, [visible, settings.earlyTrackingWindowHours, settings.slideshowSpeedSeconds]);
+
+  const confirmEarlyHours = () => {
+    const n = parseFloat(earlyHoursStr);
+    if (!isNaN(n) && n >= 0) settings.update({ earlyTrackingWindowHours: n });
+    else setEarlyHoursStr(String(settings.earlyTrackingWindowHours));
+  };
+
+  const confirmSlideshowSpeed = () => {
+    const n = parseFloat(slideshowSpeedStr);
+    if (!isNaN(n) && n > 0) settings.update({ slideshowSpeedSeconds: n });
+    else setSlideshowSpeedStr(String(settings.slideshowSpeedSeconds));
+  };
 
   return (
     <Modal
@@ -27,80 +50,88 @@ export default function SettingsModal({ visible, onClose }: Props) {
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>Settings</Text>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.handle} />
+            <Text style={styles.title}>Settings</Text>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Early tracking window */}
-            <SettingRow label="Early Tracking Window (hours)">
-              <TextInput
-                style={styles.numberInput}
-                value={String(settings.earlyTrackingWindowHours)}
-                onChangeText={(v) => {
-                  const n = parseInt(v, 10);
-                  if (!isNaN(n) && n >= 0)
-                    settings.update({ earlyTrackingWindowHours: n });
-                }}
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-            </SettingRow>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollContent}
+            >
+              {/* Early tracking window — use keyboard "Done" to confirm */}
+              <SettingRow label="Early Tracking Window (hours)">
+                <TextInput
+                  style={styles.numberInput}
+                  value={earlyHoursStr}
+                  onChangeText={setEarlyHoursStr}
+                  onSubmitEditing={confirmEarlyHours}
+                  returnKeyType="done"
+                  keyboardType="decimal-pad"
+                  maxLength={6}
+                  selectTextOnFocus
+                />
+              </SettingRow>
 
-            {/* View grouped things */}
-            <SettingRow label="Show Grouped Items on Home">
-              <Switch
-                value={settings.viewGroupedThingsInHome}
-                onValueChange={(v) =>
-                  settings.update({ viewGroupedThingsInHome: v })
-                }
-                trackColor={{ false: '#3a3a4a', true: '#7c3aed' }}
-                thumbColor="#fff"
-              />
-            </SettingRow>
+              {/* View grouped things */}
+              <SettingRow label="Show Grouped Items on Home">
+                <Switch
+                  value={settings.viewGroupedThingsInHome}
+                  onValueChange={(v) =>
+                    settings.update({ viewGroupedThingsInHome: v })
+                  }
+                  trackColor={{ false: '#3a3a4a', true: '#7c3aed' }}
+                  thumbColor="#fff"
+                />
+              </SettingRow>
 
-            {/* Search bar */}
-            <SettingRow label="Show Search Bar">
-              <Switch
-                value={settings.showSearchBar}
-                onValueChange={(v) => settings.update({ showSearchBar: v })}
-                trackColor={{ false: '#3a3a4a', true: '#7c3aed' }}
-                thumbColor="#fff"
-              />
-            </SettingRow>
+              {/* Search bar */}
+              <SettingRow label="Show Search Bar">
+                <Switch
+                  value={settings.showSearchBar}
+                  onValueChange={(v) => settings.update({ showSearchBar: v })}
+                  trackColor={{ false: '#3a3a4a', true: '#7c3aed' }}
+                  thumbColor="#fff"
+                />
+              </SettingRow>
 
-            {/* Slideshow speed */}
-            <SettingRow label="Slideshow Speed (seconds/photo)">
-              <TextInput
-                style={styles.numberInput}
-                value={String(settings.slideshowSpeedSeconds)}
-                onChangeText={(v) => {
-                  const n = parseInt(v, 10);
-                  if (!isNaN(n) && n >= 1)
-                    settings.update({ slideshowSpeedSeconds: n });
-                }}
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-            </SettingRow>
+              {/* Slideshow speed — use keyboard "Done" to confirm */}
+              <SettingRow label="Slideshow Speed (seconds/photo)">
+                <TextInput
+                  style={styles.numberInput}
+                  value={slideshowSpeedStr}
+                  onChangeText={setSlideshowSpeedStr}
+                  onSubmitEditing={confirmSlideshowSpeed}
+                  returnKeyType="done"
+                  keyboardType="decimal-pad"
+                  maxLength={6}
+                  selectTextOnFocus
+                />
+              </SettingRow>
 
-            {/* Slideshow show date */}
-            <SettingRow label="Show Date in Slideshow">
-              <Switch
-                value={settings.slideshowShowDate}
-                onValueChange={(v) => settings.update({ slideshowShowDate: v })}
-                trackColor={{ false: '#3a3a4a', true: '#7c3aed' }}
-                thumbColor="#fff"
-              />
-            </SettingRow>
-          </ScrollView>
+              {/* Slideshow show date */}
+              <SettingRow label="Show Date in Slideshow">
+                <Switch
+                  value={settings.slideshowShowDate}
+                  onValueChange={(v) => settings.update({ slideshowShowDate: v })}
+                  trackColor={{ false: '#3a3a4a', true: '#7c3aed' }}
+                  thumbColor="#fff"
+                />
+              </SettingRow>
+            </ScrollView>
 
-          <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
-            <Text style={styles.doneBtnText}>Done</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
+              <Text style={styles.doneBtnText}>Done</Text>
+            </TouchableOpacity>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -121,6 +152,9 @@ function SettingRow({
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoid: {
+    flex: 1,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -133,7 +167,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 32,
     paddingTop: 12,
-    maxHeight: '80%',
+    maxHeight: '85%',
+  },
+  scrollContent: {
+    paddingBottom: 16,
   },
   handle: {
     width: 40,
@@ -168,9 +205,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#2a2a3a',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     fontSize: 16,
-    minWidth: 60,
+    minWidth: 52,
     textAlign: 'center',
   },
   doneBtn: {

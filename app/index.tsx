@@ -10,6 +10,7 @@ import {
   Alert,
   Pressable,
   Animated,
+  Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +22,7 @@ import GroupCard from '../src/components/GroupCard';
 import BottomNav from '../src/components/BottomNav';
 import SearchBar from '../src/components/SearchBar';
 import SettingsModal from '../src/components/SettingsModal';
+import TimePickerField from '../src/components/TimePickerField';
 import { ThingToTrackGroup } from '../src/types';
 type GridItem =
   | { kind: 'thing'; id: string }
@@ -228,16 +230,15 @@ export default function HomeScreen() {
               placeholder="e.g. All Fingers"
               placeholderTextColor="#555"
               autoFocus
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
 
-            <Text style={styles.dialogLabel}>Reminder Time (HH:MM)</Text>
-            <TextInput
-              style={styles.dialogInput}
+            <TimePickerField
+              label="Reminder Time"
               value={newGroupTime}
-              onChangeText={setNewGroupTime}
-              placeholder="20:00"
-              placeholderTextColor="#555"
-              keyboardType="numbers-and-punctuation"
+              onValueChange={setNewGroupTime}
+              inputStyle={styles.dialogInput}
             />
 
             <Text style={styles.dialogLabel}>Interval (days)</Text>
@@ -248,6 +249,9 @@ export default function HomeScreen() {
               keyboardType="number-pad"
               placeholder="1"
               placeholderTextColor="#555"
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+              selectTextOnFocus
             />
 
             <View style={styles.dialogBtns}>
@@ -322,7 +326,7 @@ const styles = StyleSheet.create({
   },
   row: {
     gap: 12,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   emptyState: {
     alignItems: 'center',

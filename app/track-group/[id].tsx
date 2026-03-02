@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,7 @@ import { rescheduleAllNotifications } from '../../src/utils/notifications';
 export default function TrackGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { things, groups, addPhotoToThing, markTracked, lastTracked } = useThingsStore();
+  const { things, groups, addPhotoToThing, updateThing, markTracked, lastTracked } = useThingsStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -27,12 +27,18 @@ export default function TrackGroupScreen() {
   const members = group ? things.filter((t) => group.thingIds.includes(t.id)) : [];
   const currentThing = members[currentIndex];
 
+  const [zoom, setZoom] = useState(currentThing?.savedZoom ?? 0);
+  useEffect(() => {
+    setZoom(currentThing?.savedZoom ?? 0);
+  }, [currentThing?.id, currentThing?.savedZoom]);
+
   const handleCapture = async (photo: CameraCapturedPicture) => {
     if (saving || !currentThing) return;
     setSaving(true);
     try {
       const saved = await savePhoto(photo.uri, currentThing.id);
       addPhotoToThing(currentThing.id, saved);
+      updateThing(currentThing.id, { savedZoom: zoom });
       markTracked(currentThing.id);
 
       if (currentIndex + 1 >= members.length) {
@@ -83,6 +89,11 @@ export default function TrackGroupScreen() {
       <CameraWithOverlay
         onCapture={handleCapture}
         overlay={currentThing?.overlay}
+        zoom={zoom}
+        onZoomChange={setZoom}
+        disabled={saving}
+        zoomLocked={(currentThing?.photographs.length ?? 0) > 0}
+        key={currentThing?.id}
       />
 
       {/* Header + progress overlay */}

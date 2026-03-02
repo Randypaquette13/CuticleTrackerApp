@@ -7,17 +7,20 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Keyboard,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThingsStore } from '../../src/store/thingsStore';
 import OverlayView from '../../src/components/OverlayView';
+import TimePickerField from '../../src/components/TimePickerField';
 import { rescheduleAllNotifications } from '../../src/utils/notifications';
+import { deletePhoto } from '../../src/utils/photos';
 
 export default function EditThingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { things, groups, updateThing, deleteThing, lastTracked } = useThingsStore();
+  const { things, groups, updateThing, deleteThing, clearLastTracked, lastTracked } = useThingsStore();
 
   const thing = things.find((t) => t.id === id);
 
@@ -66,6 +69,33 @@ export default function EditThingScreen() {
     router.back();
   };
 
+  const handleDeleteAllPhotos = () => {
+    if (thing.photographs.length === 0) return;
+    Alert.alert(
+      'Delete All Pictures',
+      `Remove all ${thing.photographs.length} photo(s) from "${thing.displayName}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            for (const photo of thing.photographs) {
+              await deletePhoto(photo.uri);
+            }
+            updateThing(id, { photographs: [] });
+            clearLastTracked(id);
+            rescheduleAllNotifications(
+              useThingsStore.getState().things,
+              groups,
+              useThingsStore.getState().lastTracked
+            );
+          },
+        },
+      ]
+    );
+  };
+
   const handleDelete = () => {
     Alert.alert(
       'Delete Tracker',
@@ -96,7 +126,7 @@ export default function EditThingScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.form}>
+      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
         {/* Overlay preview */}
         <View style={styles.overlaySection}>
           <Text style={styles.label}>Overlay Preview</Text>
@@ -134,6 +164,11 @@ export default function EditThingScreen() {
           <Text style={styles.infoLabel}>Photos taken</Text>
           <Text style={styles.infoValue}>{thing.photographs.length}</Text>
         </View>
+        {thing.photographs.length > 0 && (
+          <TouchableOpacity style={styles.deletePhotosBtn} onPress={handleDeleteAllPhotos}>
+            <Text style={styles.deletePhotosBtnText}>🗑  Delete all pictures</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.label}>Display Name</Text>
         <TextInput
@@ -142,16 +177,15 @@ export default function EditThingScreen() {
           onChangeText={setName}
           placeholder="e.g. Left Index Finger"
           placeholderTextColor="#555"
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
         />
 
-        <Text style={styles.label}>Reminder Time (HH:MM)</Text>
-        <TextInput
-          style={styles.input}
+        <TimePickerField
+          label="Reminder Time"
           value={reminderTime}
-          onChangeText={setReminderTime}
-          placeholder="20:00"
-          placeholderTextColor="#555"
-          keyboardType="numbers-and-punctuation"
+          onValueChange={setReminderTime}
+          inputStyle={styles.input}
         />
 
         <Text style={styles.label}>Interval (days)</Text>
@@ -162,6 +196,9 @@ export default function EditThingScreen() {
           keyboardType="number-pad"
           placeholder="1"
           placeholderTextColor="#555"
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
+          selectTextOnFocus
         />
 
         {/* Delete */}
@@ -237,6 +274,15 @@ const styles = StyleSheet.create({
   },
   infoLabel: { color: '#aaa', fontSize: 14 },
   infoValue: { color: '#7c3aed', fontSize: 14, fontWeight: '600' },
+  deletePhotosBtn: {
+    backgroundColor: '#2a1a1a',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4a2a2a',
+  },
+  deletePhotosBtnText: { color: '#ff8a80', fontSize: 14, fontWeight: '600' },
   deleteBtn: {
     marginTop: 32,
     backgroundColor: '#3a1a1a',

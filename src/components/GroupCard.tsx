@@ -11,9 +11,8 @@ import {
 import { useRouter } from 'expo-router';
 import { ThingToTrackGroup, ThingToTrack } from '../types';
 import OverlayView from './OverlayView';
-import { daysUntilNext, canTrackGroup } from '../utils/tracking';
+import { daysUntilNext } from '../utils/tracking';
 import { useThingsStore } from '../store/thingsStore';
-import { useSettingsStore } from '../store/settingsStore';
 
 const CARD_SIZE = 150;
 const MINI_OVERLAY_SIZE = 34;
@@ -26,12 +25,9 @@ interface Props {
 export default function GroupCard({ group, things }: Props) {
   const router = useRouter();
   const { lastTracked } = useThingsStore();
-  const { earlyTrackingWindowHours } = useSettingsStore();
 
   const members = things.filter((t) => group.thingIds.includes(t.id));
-  const last = lastTracked[group.id];
-  const daysLeft = daysUntilNext(group.reminderTime, group.intervalDays, last);
-  const canTrack = canTrackGroup(group, earlyTrackingWindowHours, last);
+  const daysLeft = daysUntilNext(group.reminderTime, group.intervalDays, lastTracked[group.id]);
 
   const handlePress = () => {
     if (Platform.OS === 'ios') {
@@ -42,37 +38,16 @@ export default function GroupCard({ group, things }: Props) {
           title: group.displayName,
         },
         (idx) => {
-          if (idx === 0 && canTrack) router.push(`/track-group/${group.id}`);
-          else if (idx === 0)
-            Alert.alert(
-              'Not yet',
-              `You can track ${group.displayName} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`
-            );
+          if (idx === 0) router.push(`/track-group/${group.id}`);
           else if (idx === 1) router.push(`/slideshow/group-${group.id}`);
           else if (idx === 2) router.push(`/edit-group/${group.id}`);
         }
       );
     } else {
       Alert.alert(group.displayName, undefined, [
-        {
-          text: 'Track Group',
-          onPress: () => {
-            if (canTrack) router.push(`/track-group/${group.id}`);
-            else
-              Alert.alert(
-                'Not yet',
-                `Next in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`
-              );
-          },
-        },
-        {
-          text: 'View Slideshows',
-          onPress: () => router.push(`/slideshow/group-${group.id}`),
-        },
-        {
-          text: 'Edit Group',
-          onPress: () => router.push(`/edit-group/${group.id}`),
-        },
+        { text: 'Track Group', onPress: () => router.push(`/track-group/${group.id}`) },
+        { text: 'View Slideshows', onPress: () => router.push(`/slideshow/group-${group.id}`) },
+        { text: 'Edit Group', onPress: () => router.push(`/edit-group/${group.id}`) },
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
