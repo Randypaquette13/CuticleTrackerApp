@@ -1,11 +1,14 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, Alert } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, Alert, Dimensions } from 'react-native';
 import Slider from '@react-native-community/slider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, type CameraType, type CameraCapturedPicture } from 'expo-camera';
 import { DrawingOverlay } from '../types';
 import OverlayView from './OverlayView';
 
 const FOCUS_RETICLE_SIZE = 64;
+/** Nudge overlay down so it aligns with camera preview (preview is often inset from top). */
+const OVERLAY_OFFSET_Y = 0;
 const FOCUS_RETICLE_DURATION_MS = 1200;
 /** After tap, hold single-shot focus this long then return to continuous. */
 const FOCUS_LOCK_MS = 600;
@@ -40,25 +43,51 @@ export default function CameraWithOverlay({
   disabled = false,
   zoomLocked = false,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const [capturing, setCapturing] = useState(false);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const [autofocus, setAutofocus] = useState<'off' | 'on'>('off'); // 'off' = continuous, 'on' = single-shot then lock
+  const [sliderKey, setSliderKey] = useState(0);
   const clearFocusTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusLockTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const overlayLayout = overlay
+    ? (() => {
+        const win = Dimensions.get('window');
+        const ow = overlay.canvasWidth;
+        const oh = overlay.canvasHeight;
+        const aspect = ow / (oh || 1);
+        let w: number;
+        let h: number;
+        if (win.width / win.height > aspect) {
+          h = win.height;
+          w = win.height * aspect;
+        } else {
+          w = win.width;
+          h = win.width / aspect;
+        }
+        return { width: w, height: h };
+      })()
+    : null;
+
+  const showZoomLockedAlert = useCallback(() => {
+    Alert.alert(
+      'Zoom locked',
+      'Zoom can only be set when taking the first picture. Later photos use the same zoom for consistency.',
+      [{ text: 'OK', onPress: () => setSliderKey((k) => k + 1) }]
+    );
+  }, []);
 
   const handleZoomChange = useCallback(
     (value: number) => {
       if (zoomLocked) {
-        Alert.alert(
-          'Zoom locked',
-          'Zoom can only be set when taking the first picture. Later photos use the same zoom for consistency.'
-        );
+        showZoomLockedAlert();
         return;
       }
       onZoomChange?.(value);
     },
-    [zoomLocked, onZoomChange]
+    [zoomLocked, onZoomChange, showZoomLockedAlert]
   );
 
   const handleCapture = async () => {
@@ -128,13 +157,13 @@ export default function CameraWithOverlay({
         />
       )}
 
-      {overlay && (
+      {overlay && overlayLayout && (
         <View style={[StyleSheet.absoluteFill, styles.overlayContainer]}>
-          <View style={styles.overlayWrapper}>
+          <View style={[styles.overlayWrapper, { width: overlayLayout.width, height: overlayLayout.height, marginTop: OVERLAY_OFFSET_Y }]}>
             <OverlayView
               overlay={overlay}
-              width={280}
-              height={280}
+              width={overlayLayout.width}
+              height={overlayLayout.height}
               opacity={0.6}
             />
           </View>
@@ -153,9 +182,24 @@ export default function CameraWithOverlay({
       {/* Zoom sliders — left and right; same value, either side controls zoom */}
       {onZoomChange != null && (
         <>
+          {zoomLocked && (
+            <>
+              <View
+                style={[styles.zoomSlidersLockOverlay, styles.zoomSlidersLockOverlayLeft]}
+                pointerEvents="auto"
+                onTouchStart={showZoomLockedAlert}
+              />
+              <View
+                style={[styles.zoomSlidersLockOverlay, styles.zoomSlidersLockOverlayRight]}
+                pointerEvents="auto"
+                onTouchStart={showZoomLockedAlert}
+              />
+            </>
+          )}
           <View style={[styles.zoomSliderContainer, styles.zoomSliderLeft]} pointerEvents="box-none">
             <View style={styles.zoomSliderTrack}>
               <Slider
+                key={`zoom-slider-left-${sliderKey}`}
                 style={styles.zoomSlider}
                 minimumValue={0}
                 maximumValue={1}
@@ -170,6 +214,7 @@ export default function CameraWithOverlay({
           <View style={[styles.zoomSliderContainer, styles.zoomSliderRight]} pointerEvents="box-none">
             <View style={styles.zoomSliderTrack}>
               <Slider
+                key={`zoom-slider-right-${sliderKey}`}
                 style={styles.zoomSlider}
                 minimumValue={0}
                 maximumValue={1}
@@ -214,10 +259,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     pointerEvents: 'none',
   },
-  overlayWrapper: {
-    width: 280,
-    height: 280,
-  },
+  overlayWrapper: {},
   shutterContainer: {
     position: 'absolute',
     bottom: 60,
@@ -274,6 +316,18 @@ const styles = StyleSheet.create({
   },
   zoomSliderRight: {
     right: 12,
+  },
+  zoomSlidersLockOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 110,
+    width: 60,
+  },
+  zoomSlidersLockOverlayLeft: {
+    left: 0,
+  },
+  zoomSlidersLockOverlayRight: {
+    right: 0,
   },
   zoomSliderTrack: {
     width: 36,

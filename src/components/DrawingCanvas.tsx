@@ -15,6 +15,9 @@ interface Props {
   width: number;
   height: number;
   committedStrokes: DrawStroke[];
+  /** If committed strokes were drawn on a different canvas size, pass that size so they scale correctly. */
+  committedStrokesSourceWidth?: number;
+  committedStrokesSourceHeight?: number;
   color: string;
   strokeWidth: number;
   isEraser: boolean;
@@ -29,6 +32,8 @@ export default function DrawingCanvas({
   width,
   height,
   committedStrokes,
+  committedStrokesSourceWidth,
+  committedStrokesSourceHeight,
   color,
   strokeWidth,
   isEraser,
@@ -37,9 +42,19 @@ export default function DrawingCanvas({
   const activePath = useRef<ActivePath | null>(null);
   const [, forceUpdate] = useState(0);
 
+  const scaleX = committedStrokesSourceWidth != null && committedStrokesSourceWidth > 0
+    ? width / committedStrokesSourceWidth
+    : 1;
+  const scaleY = committedStrokesSourceHeight != null && committedStrokesSourceHeight > 0
+    ? height / committedStrokesSourceHeight
+    : 1;
+  const scaleStrokes = committedStrokesSourceWidth != null && committedStrokesSourceHeight != null;
+
   const handleTouchStart = useCallback(
     (e: any) => {
-      const touch = e.nativeEvent.touches[0];
+      const touches = e.nativeEvent.touches;
+      if (touches.length >= 2) return;
+      const touch = touches[0];
       if (!touch) return;
       const path = Skia.Path.Make();
       path.moveTo(touch.locationX, touch.locationY);
@@ -56,7 +71,15 @@ export default function DrawingCanvas({
   );
 
   const handleTouchMove = useCallback((e: any) => {
-    const touch = e.nativeEvent.touches[0];
+    const touches = e.nativeEvent.touches;
+    if (touches.length >= 2) {
+      if (activePath.current) {
+        activePath.current = null;
+        forceUpdate((n) => n + 1);
+      }
+      return;
+    }
+    const touch = touches[0];
     if (!touch || !activePath.current) return;
     activePath.current.skPath.lineTo(touch.locationX, touch.locationY);
     forceUpdate((n) => n + 1);
@@ -80,6 +103,13 @@ export default function DrawingCanvas({
     const skPath = liveSkPath ?? Skia.Path.MakeFromSVGString(stroke.path);
     if (!skPath) return null;
 
+    if (scaleStrokes && !liveSkPath) {
+      skPath.transform(Skia.Matrix().scale(scaleX, scaleY));
+    }
+    const strokeW = scaleStrokes && !liveSkPath
+      ? stroke.strokeWidth * Math.min(scaleX, scaleY)
+      : stroke.strokeWidth;
+
     if (stroke.isEraser) {
       return (
         <Path
@@ -87,7 +117,7 @@ export default function DrawingCanvas({
           path={skPath}
           color="white"
           style="stroke"
-          strokeWidth={stroke.strokeWidth}
+          strokeWidth={strokeW}
           strokeCap="round"
           strokeJoin="round"
           blendMode="dstOut"
@@ -100,7 +130,7 @@ export default function DrawingCanvas({
         path={skPath}
         color={stroke.color}
         style="stroke"
-        strokeWidth={stroke.strokeWidth}
+        strokeWidth={strokeW}
         strokeCap="round"
         strokeJoin="round"
       />

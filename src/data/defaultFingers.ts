@@ -33,6 +33,12 @@ const FINGER_NAMES: { id: string; displayName: string }[] = [
   { id: 'finger-right-pinky', displayName: 'Right Pinky' },
 ];
 
+export const DEFAULT_FINGER_IDS = new Set(FINGER_NAMES.map((f) => f.id));
+
+export function isDefaultFinger(thingId: string): boolean {
+  return DEFAULT_FINGER_IDS.has(thingId);
+}
+
 export const defaultFingers: ThingToTrack[] = FINGER_NAMES.map(({ id, displayName }) => ({
   id,
   displayName,

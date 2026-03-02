@@ -8,21 +8,25 @@ import {
   ScrollView,
   Alert,
   Keyboard,
+  Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThingsStore } from '../../src/store/thingsStore';
+import { isDefaultFinger } from '../../src/data/defaultFingers';
 import OverlayView from '../../src/components/OverlayView';
 import TimePickerField from '../../src/components/TimePickerField';
 import { rescheduleAllNotifications } from '../../src/utils/notifications';
 import { deletePhoto } from '../../src/utils/photos';
 
 export default function EditThingScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = typeof params.id === 'string' ? params.id : params.id?.[0] ?? '';
   const router = useRouter();
   const { things, groups, updateThing, deleteThing, clearLastTracked, lastTracked } = useThingsStore();
 
   const thing = things.find((t) => t.id === id);
+  const showOverlaySection = !isDefaultFinger(id);
 
   const [name, setName] = useState(thing?.displayName ?? '');
   const [reminderTime, setReminderTime] = useState(thing?.reminderTime ?? '20:00');
@@ -127,37 +131,59 @@ export default function EditThingScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        {/* Overlay preview */}
-        <View style={styles.overlaySection}>
-          <Text style={styles.label}>Overlay Preview</Text>
-          <View style={styles.overlayPreview}>
-            {thing.overlay ? (
-              <OverlayView
-                overlay={thing.overlay}
-                width={200}
-                height={200}
-                opacity={0.8}
-              />
-            ) : (
-              <View style={styles.noOverlay}>
-                <Text style={styles.noOverlayText}>No overlay drawn</Text>
-              </View>
-            )}
+        {/* Overlay preview (hidden for default 10 fingers — they use a fixed overlay) */}
+        {showOverlaySection && (
+          <View style={styles.overlaySection}>
+            <Text style={styles.label}>Overlay Preview</Text>
+            <View style={styles.overlayPreviewWrapper}>
+              {thing.overlay ? (() => {
+                const ow = thing.overlay.canvasWidth;
+                const oh = thing.overlay.canvasHeight;
+                const aspect = ow / (oh || 1);
+                const max = 280;
+                const previewW = aspect >= 1 ? max : max * aspect;
+                const previewH = aspect >= 1 ? max / aspect : max;
+                const photoUri = thing.photographs.at(-1)?.uri;
+                return (
+                  <View style={[styles.overlayPreview, { width: previewW, height: previewH }]}>
+                    {photoUri ? (
+                      <Image
+                        source={{ uri: photoUri }}
+                        style={StyleSheet.absoluteFill}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={[StyleSheet.absoluteFill, styles.overlayPreviewBg]} />
+                    )}
+                    <OverlayView
+                      overlay={thing.overlay}
+                      width={previewW}
+                      height={previewH}
+                      opacity={0.8}
+                    />
+                  </View>
+                );
+              })() : (
+                <View style={[styles.overlayPreview, styles.overlayPreviewEmpty]}>
+                  <Text style={styles.noOverlayText}>No overlay drawn</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.editOverlayBtn}
+              onPress={() =>
+                router.push({
+                  pathname: '/draw-overlay/[id]',
+                  params: { id },
+                })
+              }
+            >
+              <Text style={styles.editOverlayBtnText}>
+                {thing.overlay ? '✏️ Edit Overlay' : '✏️ Draw Overlay'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.editOverlayBtn}
-            onPress={() =>
-              router.push({
-                pathname: '/draw-overlay/[id]',
-                params: { id },
-              })
-            }
-          >
-            <Text style={styles.editOverlayBtnText}>
-              {thing.overlay ? '✏️ Edit Overlay' : '✏️ Draw Overlay'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        )}
 
         {/* Photo count info */}
         <View style={styles.infoRow}>
@@ -245,18 +271,24 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2a2a3a',
     marginBottom: 8,
   },
+  overlayPreviewWrapper: {
+    alignItems: 'center',
+  },
   overlayPreview: {
-    width: 200,
-    height: 200,
     backgroundColor: '#1e1e2e',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#2a2a3a',
     overflow: 'hidden',
+    position: 'relative',
+  },
+  overlayPreviewEmpty: {
+    width: 200,
+    height: 200,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noOverlay: { alignItems: 'center', justifyContent: 'center', flex: 1 },
+  overlayPreviewBg: {
+    backgroundColor: '#1e1e2e',
+  },
   noOverlayText: { color: '#444', fontSize: 13 },
   editOverlayBtn: {
     backgroundColor: '#2a2a3a',
