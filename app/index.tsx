@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   Modal,
+  ScrollView,
   TextInput,
   TouchableOpacity,
   Alert,
@@ -14,7 +15,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useThingsStore } from '../src/store/thingsStore';
+import { useThingsStore, type GridItemKey } from '../src/store/thingsStore';
 import { useSettingsStore } from '../src/store/settingsStore';
 import { rescheduleAllNotifications, configureNotificationHandler } from '../src/utils/notifications';
 import ThingCard from '../src/components/ThingCard';
@@ -30,7 +31,7 @@ type GridItem =
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { things, groups, lastTracked, addGroup } = useThingsStore();
+  const { things, groups, lastTracked, addGroup, deleteThing, deleteGroup, homeOrder, setHomeOrder } = useThingsStore();
   const { showSearchBar, viewGroupedThingsInHome } = useSettingsStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,6 +42,8 @@ export default function HomeScreen() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupTime, setNewGroupTime] = useState('20:00');
   const [newGroupInterval, setNewGroupInterval] = useState('1');
+  const [reorderMode, setReorderMode] = useState(false);
+  const [reorderList, setReorderList] = useState<GridItem[]>([]);
   const allSetOpacity = useRef(new Animated.Value(0)).current;
 
   // Notification setup on mount
@@ -58,8 +61,11 @@ export default function HomeScreen() {
     ]).start();
   };
 
-  // Build grid items
+  // Build grid items (optionally ordered by homeOrder)
   const gridItems = useMemo<GridItem[]>(() => {
+    const keyOf = (item: GridItem): GridItemKey =>
+      item.kind === 'thing' ? `thing-${item.id}` : `group-${item.id}`;
+
     const q = searchQuery.toLowerCase();
 
     const groupItems: GridItem[] = groups
@@ -73,14 +79,90 @@ export default function HomeScreen() {
       })
       .map((t) => ({ kind: 'thing', id: t.id }));
 
-    return [...groupItems, ...thingItems];
-  }, [things, groups, searchQuery, viewGroupedThingsInHome]);
+    const all: GridItem[] = [...groupItems, ...thingItems];
+    if (homeOrder.length === 0) return all;
+
+    const byKey = new Map<GridItemKey, GridItem>();
+    all.forEach((item) => byKey.set(keyOf(item), item));
+    const ordered: GridItem[] = [];
+    homeOrder.forEach((key) => {
+      const item = byKey.get(key);
+      if (item) {
+        ordered.push(item);
+        byKey.delete(key);
+      }
+    });
+    byKey.forEach((item) => ordered.push(item));
+    return ordered;
+  }, [things, groups, searchQuery, viewGroupedThingsInHome, homeOrder]);
 
   // Toggle selection in group-creation mode
-  const toggleSelect = (id: string) => {
+  const toggleSelect = (key: GridItemKey) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
     );
+  };
+
+  const selectKey = (item: GridItem): GridItemKey =>
+    item.kind === 'thing' ? `thing-${item.id}` : `group-${item.id}`;
+
+  const onLongPressCard = (item: GridItem) => {
+    setSelectMode(true);
+    setSelectedIds([selectKey(item)]);
+  };
+
+  const selectedThingIds = selectedIds
+    .filter((k) => k.startsWith('thing-'))
+    .map((k) => k.replace('thing-', ''));
+  const selectedGroupIds = selectedIds.filter((k) => k.startsWith('group-')).map((k) => k.replace('group-', ''));
+  const canMakeGroup = selectedThingIds.length >= 2 && selectedIds.length === selectedThingIds.length;
+  const canDelete = selectedIds.length > 0;
+
+  const handleDeleteSelected = () => {
+    const count = selectedIds.length;
+    Alert.alert(
+      'Delete selected?',
+      `Delete ${count} item${count === 1 ? '' : 's'}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            selectedIds.forEach((key) => {
+              if (key.startsWith('group-')) deleteGroup(key.replace('group-', ''));
+              else deleteThing(key.replace(/^thing-/, ''));
+            });
+            const state = useThingsStore.getState();
+            rescheduleAllNotifications(state.things, state.groups, state.lastTracked);
+            setSelectMode(false);
+            setSelectedIds([]);
+          },
+        },
+      ]
+    );
+  };
+
+  const openReorderMode = () => {
+    setReorderList([...gridItems]);
+    setSelectMode(false);
+    setSelectedIds([]);
+    setReorderMode(true);
+  };
+
+  const handleReorderMove = (index: number, direction: 'up' | 'down') => {
+    setReorderList((prev) => {
+      const next = [...prev];
+      const j = direction === 'up' ? index - 1 : index + 1;
+      if (j < 0 || j >= next.length) return prev;
+      [next[index], next[j]] = [next[j], next[index]];
+      return next;
+    });
+  };
+
+  const handleReorderDone = () => {
+    setHomeOrder(reorderList.map((item) => selectKey(item)));
+    setReorderMode(false);
   };
 
   const handleCreateGroupConfirm = () => {
@@ -88,7 +170,7 @@ export default function HomeScreen() {
       Alert.alert('Name required', 'Please enter a name for this group.');
       return;
     }
-    if (selectedIds.length === 0) {
+    if (selectedThingIds.length === 0) {
       Alert.alert('No trackers selected', 'Please select at least one tracker.');
       return;
     }
@@ -98,7 +180,7 @@ export default function HomeScreen() {
       displayName: newGroupName.trim(),
       reminderTime: newGroupTime,
       intervalDays: isNaN(interval) || interval < 1 ? 1 : interval,
-      thingIds: selectedIds,
+      thingIds: selectedThingIds,
     };
     addGroup(newGroup);
     rescheduleAllNotifications(
@@ -115,10 +197,20 @@ export default function HomeScreen() {
   };
 
   const renderItem = ({ item }: { item: GridItem }) => {
+    const key = selectKey(item);
     if (item.kind === 'group') {
       const group = groups.find((g) => g.id === item.id);
       if (!group) return null;
-      return <GroupCard group={group} things={things} />;
+      return (
+        <GroupCard
+          group={group}
+          things={things}
+          isSelectMode={selectMode}
+          isSelected={selectedIds.includes(key)}
+          onToggleSelect={(id) => toggleSelect('group-' + id)}
+          onLongPress={() => onLongPressCard(item)}
+        />
+      );
     }
     const thing = things.find((t) => t.id === item.id);
     if (!thing) return null;
@@ -126,8 +218,9 @@ export default function HomeScreen() {
       <ThingCard
         thing={thing}
         isSelectMode={selectMode}
-        isSelected={selectedIds.includes(thing.id)}
-        onToggleSelect={toggleSelect}
+        isSelected={selectedIds.includes(key)}
+        onToggleSelect={(id) => toggleSelect('thing-' + id)}
+        onLongPress={() => onLongPressCard(item)}
       />
     );
   };
@@ -148,17 +241,43 @@ export default function HomeScreen() {
 
       {/* Select mode banner */}
       {selectMode && (
-        <View style={styles.selectBanner}>
-          <Text style={styles.selectBannerText}>
-            Select trackers to group ({selectedIds.length} selected)
-          </Text>
-          <TouchableOpacity onPress={() => {
-            setSelectMode(false);
-            setSelectedIds([]);
-          }}>
-            <Text style={styles.cancelSelectText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
+        <>
+          <View style={styles.selectBanner}>
+            <Text style={styles.selectBannerText}>
+              {selectedIds.length} selected
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setSelectMode(false);
+                setSelectedIds([]);
+              }}
+            >
+              <Text style={styles.cancelSelectText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.selectActions}>
+            <TouchableOpacity
+              style={[styles.selectActionBtn, !canMakeGroup && styles.selectActionBtnDisabled]}
+              onPress={() => canMakeGroup && setGroupDialogVisible(true)}
+              disabled={!canMakeGroup}
+            >
+              <Text style={styles.selectActionBtnText}>Make Group</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.selectActionBtn, styles.selectActionBtnDanger]}
+              onPress={handleDeleteSelected}
+              disabled={!canDelete}
+            >
+              <Text style={styles.selectActionBtnText}>Delete</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.selectActionBtn}
+              onPress={openReorderMode}
+            >
+              <Text style={styles.selectActionBtnText}>Reorder</Text>
+            </TouchableOpacity>
+          </View>
+        </>
       )}
 
       {/* Grid */}
@@ -179,17 +298,6 @@ export default function HomeScreen() {
         }
       />
 
-      {/* Confirm group button (select mode) */}
-      {selectMode && (
-        <TouchableOpacity
-          style={[styles.confirmGroupBtn, selectedIds.length === 0 && styles.confirmGroupBtnDisabled]}
-          onPress={() => selectedIds.length > 0 && setGroupDialogVisible(true)}
-        >
-          <Text style={styles.confirmGroupBtnText}>
-            Confirm Group ({selectedIds.length})
-          </Text>
-        </TouchableOpacity>
-      )}
 
       {/* Bottom nav */}
       {!selectMode && (
@@ -210,6 +318,61 @@ export default function HomeScreen() {
 
       {/* Settings modal */}
       <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
+
+      {/* Reorder modal */}
+      <Modal
+        visible={reorderMode}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReorderMode(false)}
+      >
+        <View style={styles.reorderModalContainer}>
+          <View style={styles.reorderModalHeader}>
+            <Text style={styles.reorderModalTitle}>Reorder</Text>
+            <TouchableOpacity onPress={handleReorderDone}>
+              <Text style={styles.reorderDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.reorderList} contentContainerStyle={styles.reorderListContent}>
+            {reorderList.map((item, index) => {
+              const label =
+                item.kind === 'thing'
+                  ? things.find((t) => t.id === item.id)?.displayName ?? item.id
+                  : groups.find((g) => g.id === item.id)?.displayName ?? item.id;
+              return (
+                <View key={selectKey(item)} style={styles.reorderRow}>
+                  <TouchableOpacity
+                    style={[styles.reorderMoveBtn, index === 0 && styles.reorderMoveBtnDisabled]}
+                    onPress={() => handleReorderMove(index, 'up')}
+                    disabled={index === 0}
+                  >
+                    <Text style={styles.reorderMoveBtnText}>↑</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.reorderRowLabel} numberOfLines={1}>
+                    {label}
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.reorderMoveBtn,
+                      index === reorderList.length - 1 && styles.reorderMoveBtnDisabled,
+                    ]}
+                    onPress={() => handleReorderMove(index, 'down')}
+                    disabled={index === reorderList.length - 1}
+                  >
+                    <Text style={styles.reorderMoveBtnText}>↓</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </ScrollView>
+          <TouchableOpacity
+            style={styles.reorderCancelBtn}
+            onPress={() => setReorderMode(false)}
+          >
+            <Text style={styles.reorderCancelBtnText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
 
       {/* Create Group details dialog */}
       <Modal
@@ -316,6 +479,30 @@ const styles = StyleSheet.create({
   cancelSelectText: {
     color: '#7c3aed',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  selectActions: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  selectActionBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#2a2a3a',
+    alignItems: 'center',
+  },
+  selectActionBtnDisabled: {
+    opacity: 0.5,
+  },
+  selectActionBtnDanger: {
+    backgroundColor: '#3a1a1a',
+  },
+  selectActionBtnText: {
+    color: '#e2e2e8',
+    fontSize: 13,
     fontWeight: '600',
   },
   grid: {
@@ -434,5 +621,75 @@ const styles = StyleSheet.create({
   },
   dialogConfirmBtnText: {
     color: '#fff',
+  },
+  // Reorder modal
+  reorderModalContainer: {
+    flex: 1,
+    backgroundColor: '#0f0f1a',
+    paddingTop: 56,
+    paddingHorizontal: 16,
+  },
+  reorderModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  reorderModalTitle: {
+    color: '#e2e2e8',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  reorderDoneText: {
+    color: '#7c3aed',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  reorderList: {
+    flex: 1,
+  },
+  reorderListContent: {
+    paddingBottom: 20,
+    gap: 8,
+  },
+  reorderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e1e2e',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#2a2a3a',
+    gap: 12,
+  },
+  reorderMoveBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#2a2a3a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reorderMoveBtnDisabled: {
+    opacity: 0.4,
+  },
+  reorderMoveBtnText: {
+    color: '#e2e2e8',
+    fontSize: 18,
+  },
+  reorderRowLabel: {
+    flex: 1,
+    color: '#e2e2e8',
+    fontSize: 16,
+  },
+  reorderCancelBtn: {
+    marginTop: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  reorderCancelBtnText: {
+    color: '#888',
+    fontSize: 16,
   },
 });

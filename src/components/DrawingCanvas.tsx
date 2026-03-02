@@ -109,25 +109,35 @@ export default function DrawingCanvas({
 
   return (
     <View
-      style={{ width, height }}
+      style={[styles.container, { width, height }]}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
-      <Canvas style={StyleSheet.absoluteFill}>
-        {committedStrokes.map((s) => renderStroke(s))}
-        {activePath.current &&
-          renderStroke(
-            {
-              id: 'live',
-              path: '',
-              color: activePath.current.color,
-              strokeWidth: activePath.current.strokeWidth,
-              isEraser: activePath.current.isEraser,
-            },
-            activePath.current.skPath
-          )}
-      </Canvas>
+      <View style={styles.canvasPassThrough} pointerEvents="none">
+        <Canvas style={StyleSheet.absoluteFill}>
+          {committedStrokes.map((s) => renderStroke(s))}
+          {activePath.current &&
+            renderStroke(
+              {
+                id: 'live',
+                path: '',
+                color: activePath.current.color,
+                strokeWidth: activePath.current.strokeWidth,
+                isEraser: activePath.current.isEraser,
+              },
+              activePath.current.skPath
+            )}
+        </Canvas>
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {},
+  canvasPassThrough: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});

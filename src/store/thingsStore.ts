@@ -8,10 +8,15 @@ interface LastTrackedMap {
   [id: string]: string; // ISO timestamp of last track
 }
 
+/** Grid item key: "thing-{id}" or "group-{id}" */
+export type GridItemKey = string;
+
 interface ThingsState {
   things: ThingToTrack[];
   groups: ThingToTrackGroup[];
   lastTracked: LastTrackedMap;
+  /** Custom order of grid items; empty = default (groups then things) */
+  homeOrder: GridItemKey[];
 
   // ThingToTrack CRUD
   addThing: (thing: ThingToTrack) => void;
@@ -25,6 +30,9 @@ interface ThingsState {
   updateGroup: (id: string, updates: Partial<ThingToTrackGroup>) => void;
   deleteGroup: (id: string) => void;
 
+  // Home grid order
+  setHomeOrder: (order: GridItemKey[]) => void;
+
   // Tracking
   markTracked: (id: string) => void;
   clearLastTracked: (id: string) => void;
@@ -37,6 +45,7 @@ export const useThingsStore = create<ThingsState>()(
       things: defaultFingers,
       groups: [],
       lastTracked: {},
+      homeOrder: [],
 
       addThing: (thing) =>
         set((state) => ({ things: [...state.things, thing] })),
@@ -53,6 +62,7 @@ export const useThingsStore = create<ThingsState>()(
             ...g,
             thingIds: g.thingIds.filter((tid) => tid !== id),
           })),
+          homeOrder: state.homeOrder.filter((key) => key !== `thing-${id}`),
         })),
 
       addPhotoToThing: (thingId, photo) =>
@@ -111,7 +121,10 @@ export const useThingsStore = create<ThingsState>()(
           things: state.things.map((t) =>
             t.groupId === id ? { ...t, groupId: undefined } : t
           ),
+          homeOrder: state.homeOrder.filter((key) => key !== `group-${id}`),
         })),
+
+      setHomeOrder: (order) => set({ homeOrder: order }),
 
       markTracked: (id) =>
         set((state) => ({

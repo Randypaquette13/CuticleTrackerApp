@@ -21,6 +21,7 @@ interface Props {
   isSelectMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
+  onLongPress?: () => void;
 }
 
 export default function ThingCard({
@@ -28,6 +29,7 @@ export default function ThingCard({
   isSelectMode = false,
   isSelected = false,
   onToggleSelect,
+  onLongPress,
 }: Props) {
   const router = useRouter();
   const { lastTracked } = useThingsStore();
@@ -72,6 +74,7 @@ export default function ThingCard({
         isSelected && styles.cardSelected,
       ]}
       onPress={handlePress}
+      onLongPress={onLongPress}
       activeOpacity={0.75}
     >
       {/* Overlay preview centered in card */}

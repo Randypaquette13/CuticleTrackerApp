@@ -20,9 +20,20 @@ const MINI_OVERLAY_SIZE = 34;
 interface Props {
   group: ThingToTrackGroup;
   things: ThingToTrack[];
+  isSelectMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onLongPress?: () => void;
 }
 
-export default function GroupCard({ group, things }: Props) {
+export default function GroupCard({
+  group,
+  things,
+  isSelectMode = false,
+  isSelected = false,
+  onToggleSelect,
+  onLongPress,
+}: Props) {
   const router = useRouter();
   const { lastTracked } = useThingsStore();
 
@@ -30,6 +41,10 @@ export default function GroupCard({ group, things }: Props) {
   const daysLeft = daysUntilNext(group.reminderTime, group.intervalDays, lastTracked[group.id]);
 
   const handlePress = () => {
+    if (isSelectMode) {
+      onToggleSelect?.(group.id);
+      return;
+    }
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -58,8 +73,13 @@ export default function GroupCard({ group, things }: Props) {
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[
+        styles.card,
+        isSelectMode && styles.cardSelectMode,
+        isSelected && styles.cardSelected,
+      ]}
       onPress={handlePress}
+      onLongPress={onLongPress}
       activeOpacity={0.75}
     >
       {/* Mini overlay grid */}
@@ -98,6 +118,12 @@ export default function GroupCard({ group, things }: Props) {
           <Text style={styles.badgeText}>Next in {daysLeft}d</Text>
         </View>
       )}
+
+      {isSelectMode && (
+        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+          {isSelected && <Text style={styles.checkmark}>✓</Text>}
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -114,6 +140,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 8,
     gap: 4,
+  },
+  cardSelectMode: {
+    borderColor: '#4a4a6a',
+  },
+  cardSelected: {
+    borderColor: '#7c3aed',
+    borderWidth: 2,
+    backgroundColor: '#1e1636',
   },
   miniGrid: {
     flex: 1,
@@ -176,5 +210,27 @@ const styles = StyleSheet.create({
     color: '#d4bbff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  checkbox: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#555',
+    backgroundColor: '#2a2a3a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: '#7c3aed',
+    borderColor: '#7c3aed',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
