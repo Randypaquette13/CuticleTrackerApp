@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Photo } from '../types';
 
 const PHOTOS_DIR = FileSystem.documentDirectory + 'cuticle-photos/';

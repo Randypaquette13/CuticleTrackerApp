@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useThingsStore } from '../../src/store/thingsStore';
 import DrawingCanvas from '../../src/components/DrawingCanvas';
 import ColorWheelPicker from '../../src/components/ColorWheelPicker';
@@ -72,8 +71,7 @@ export default function DrawOverlayScreen() {
   const backgroundPhoto = thing?.photographs.at(-1)?.uri;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
@@ -191,7 +189,6 @@ export default function DrawOverlayScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-    </GestureHandlerRootView>
   );
 }
 

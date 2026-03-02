@@ -1,16 +1,10 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import {
-  Canvas,
-  Path,
-  Skia,
-  type SkPath,
-} from '@shopify/react-native-skia';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import React, { useRef, useState, useCallback } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { Canvas, Path, Skia, type SkPath } from '@shopify/react-native-skia';
 import { DrawStroke } from '../types';
 
 interface ActivePath {
-  path: SkPath;
+  skPath: SkPath;
   color: string;
   strokeWidth: number;
   isEraser: boolean;
@@ -28,8 +22,8 @@ interface Props {
 }
 
 /**
- * Interactive Skia drawing canvas. Handles touch input to record strokes.
- * Renders both previously committed strokes and the currently-in-progress stroke.
+ * Interactive Skia drawing canvas using React Native's built-in touch events.
+ * No react-native-gesture-handler or reanimated required.
  */
 export default function DrawingCanvas({
   width,
@@ -40,108 +34,100 @@ export default function DrawingCanvas({
   isEraser,
   onStrokeComplete,
 }: Props) {
-  const currentPath = useRef<SkPath | null>(null);
-  const currentStrokeId = useRef<string>('');
-  const [, forceUpdate] = useState(0);
   const activePath = useRef<ActivePath | null>(null);
+  const [, forceUpdate] = useState(0);
 
-  const panGesture = Gesture.Pan()
-    .runOnJS(true)
-    .minDistance(0)
-    .onBegin((e) => {
+  const handleTouchStart = useCallback(
+    (e: any) => {
+      const touch = e.nativeEvent.touches[0];
+      if (!touch) return;
       const path = Skia.Path.Make();
-      path.moveTo(e.x, e.y);
-      currentPath.current = path;
-      currentStrokeId.current = `stroke-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      path.moveTo(touch.locationX, touch.locationY);
       activePath.current = {
-        path,
+        skPath: path,
         color,
         strokeWidth,
         isEraser,
-        id: currentStrokeId.current,
+        id: `stroke-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       };
       forceUpdate((n) => n + 1);
-    })
-    .onUpdate((e) => {
-      if (!currentPath.current) return;
-      currentPath.current.lineTo(e.x, e.y);
-      forceUpdate((n) => n + 1);
-    })
-    .onEnd(() => {
-      if (!currentPath.current || !activePath.current) return;
-      const svgString = currentPath.current.toSVGString();
-      onStrokeComplete({
-        id: currentStrokeId.current,
-        path: svgString,
-        color: activePath.current.color,
-        strokeWidth: activePath.current.strokeWidth,
-        isEraser: activePath.current.isEraser,
-      });
-      currentPath.current = null;
-      activePath.current = null;
-      forceUpdate((n) => n + 1);
+    },
+    [color, strokeWidth, isEraser]
+  );
+
+  const handleTouchMove = useCallback((e: any) => {
+    const touch = e.nativeEvent.touches[0];
+    if (!touch || !activePath.current) return;
+    activePath.current.skPath.lineTo(touch.locationX, touch.locationY);
+    forceUpdate((n) => n + 1);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!activePath.current) return;
+    const { skPath, color: c, strokeWidth: sw, isEraser: ie, id } = activePath.current;
+    onStrokeComplete({
+      id,
+      path: skPath.toSVGString(),
+      color: c,
+      strokeWidth: sw,
+      isEraser: ie,
     });
+    activePath.current = null;
+    forceUpdate((n) => n + 1);
+  }, [onStrokeComplete]);
 
-  const renderStroke = useCallback(
-    (stroke: DrawStroke, isLive = false) => {
-      let skPath: SkPath | null;
-      if (isLive && currentPath.current) {
-        skPath = currentPath.current;
-      } else {
-        skPath = Skia.Path.MakeFromSVGString(stroke.path);
-      }
-      if (!skPath) return null;
+  const renderStroke = (stroke: DrawStroke, liveSkPath?: SkPath) => {
+    const skPath = liveSkPath ?? Skia.Path.MakeFromSVGString(stroke.path);
+    if (!skPath) return null;
 
-      if (stroke.isEraser) {
-        return (
-          <Path
-            key={stroke.id}
-            path={skPath}
-            color="white"
-            style="stroke"
-            strokeWidth={stroke.strokeWidth}
-            strokeCap="round"
-            strokeJoin="round"
-            blendMode="dstOut"
-          />
-        );
-      }
-
+    if (stroke.isEraser) {
       return (
         <Path
           key={stroke.id}
           path={skPath}
-          color={stroke.color}
+          color="white"
           style="stroke"
           strokeWidth={stroke.strokeWidth}
           strokeCap="round"
           strokeJoin="round"
+          blendMode="dstOut"
         />
       );
-    },
-    []
-  );
+    }
+    return (
+      <Path
+        key={stroke.id}
+        path={skPath}
+        color={stroke.color}
+        style="stroke"
+        strokeWidth={stroke.strokeWidth}
+        strokeCap="round"
+        strokeJoin="round"
+      />
+    );
+  };
 
   return (
-    <View style={{ width, height }}>
-      <GestureDetector gesture={panGesture}>
-        <Canvas style={StyleSheet.absoluteFill}>
-          {/* Committed strokes */}
-          {committedStrokes.map((s) => renderStroke(s))}
-          {/* Live stroke */}
-          {activePath.current &&
-            renderStroke(
-              {
-                id: 'live',
-                path: '',
-                color: activePath.current.color,
-                strokeWidth: activePath.current.strokeWidth,
-                isEraser: activePath.current.isEraser,
-              },
-              true
-            )}
-        </Canvas>
-      </GestureDetector>
+    <View
+      style={{ width, height }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <Canvas style={StyleSheet.absoluteFill}>
+        {committedStrokes.map((s) => renderStroke(s))}
+        {activePath.current &&
+          renderStroke(
+            {
+              id: 'live',
+              path: '',
+              color: activePath.current.color,
+              strokeWidth: activePath.current.strokeWidth,
+              isEraser: activePath.current.isEraser,
+            },
+            activePath.current.skPath
+          )}
+      </Canvas>
     </View>
   );
 }

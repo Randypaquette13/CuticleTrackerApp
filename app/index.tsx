@@ -22,8 +22,6 @@ import BottomNav from '../src/components/BottomNav';
 import SearchBar from '../src/components/SearchBar';
 import SettingsModal from '../src/components/SettingsModal';
 import { ThingToTrackGroup } from '../src/types';
-import 'react-native-gesture-handler';
-
 type GridItem =
   | { kind: 'thing'; id: string }
   | { kind: 'group'; id: string };
