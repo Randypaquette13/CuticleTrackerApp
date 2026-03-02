@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Cuticle Tracker",
+    "slug": "cuticle-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "cuticletracker",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.cuticletracker.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cuticle Tracker uses your camera to photograph your fingernails for tracking.",
+        "NSPhotoLibraryUsageDescription": "Cuticle Tracker saves photos of your fingernails to your library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.cuticletracker.app",
+      "permissions": ["CAMERA", "NOTIFICATIONS"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#7c3aed"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
