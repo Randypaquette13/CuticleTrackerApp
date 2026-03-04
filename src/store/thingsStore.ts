@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThingToTrack, ThingToTrackGroup, DrawingOverlay, Photo } from '../types';
-import { defaultFingers } from '../data/defaultFingers';
+import { defaultFingers, defaultAllFingersGroup } from '../data/defaultFingers';
 
 interface LastTrackedMap {
   [id: string]: string; // ISO timestamp of last track
@@ -43,7 +43,7 @@ export const useThingsStore = create<ThingsState>()(
   persist(
     (set, get) => ({
       things: defaultFingers,
-      groups: [],
+      groups: [defaultAllFingersGroup],
       lastTracked: {},
       homeOrder: [],
 

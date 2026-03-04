@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraPermissions, type CameraCapturedPicture } from 'expo-camera';
 import CameraWithOverlay from '../../src/components/CameraWithOverlay';
@@ -16,12 +16,30 @@ import { savePhoto } from '../../src/utils/photos';
 export default function NewTrackerPhoto() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const navigation = useNavigation();
   const { addPhotoToThing, updateThing, things } = useThingsStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [saving, setSaving] = useState(false);
   const [zoom, setZoom] = useState(0);
 
   const thing = things.find((t) => t.id === id);
+
+  // If user leaves this screen without taking a photo, remove the empty tracker
+  const removeTrackerIfAbandoned = () => {
+    if (!id) return;
+    const current = useThingsStore.getState().things.find((t) => t.id === id);
+    if (current && current.photographs.length === 0) useThingsStore.getState().deleteThing(id);
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', removeTrackerIfAbandoned);
+    return unsubscribe;
+  }, [navigation, id]);
+
+  const handleBack = () => {
+    removeTrackerIfAbandoned();
+    router.back();
+  };
 
   const handleCapture = async (photo: CameraCapturedPicture) => {
     if (saving) return;
@@ -70,7 +88,7 @@ export default function NewTrackerPhoto() {
       {/* Header overlay */}
       <SafeAreaView style={styles.headerOverlay} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
           <View style={styles.stepInfo}>

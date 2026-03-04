@@ -1,4 +1,4 @@
-import { ThingToTrack, DrawingOverlay } from '../types';
+import { ThingToTrack, ThingToTrackGroup, DrawingOverlay } from '../types';
 
 /** Arch curve representing the cuticle/nail bed line from a top-down self-portrait angle.
  *  Path drawn in a 100×100 coordinate space. The "n-shape" is a smooth inverted arch
@@ -20,6 +20,11 @@ function makeNailOverlay(): DrawingOverlay {
   };
 }
 
+/** Original nail overlay curve; use for one-time reset of default finger overlays. */
+export function getDefaultNailOverlay(): DrawingOverlay {
+  return makeNailOverlay();
+}
+
 const FINGER_NAMES: { id: string; displayName: string }[] = [
   { id: 'finger-left-pinky', displayName: 'Left Pinky' },
   { id: 'finger-left-ring', displayName: 'Left Ring' },
@@ -34,6 +39,7 @@ const FINGER_NAMES: { id: string; displayName: string }[] = [
 ];
 
 export const DEFAULT_FINGER_IDS = new Set(FINGER_NAMES.map((f) => f.id));
+export const DEFAULT_ALL_FINGERS_GROUP_ID = 'group-all-fingers';
 
 export function isDefaultFinger(thingId: string): boolean {
   return DEFAULT_FINGER_IDS.has(thingId);
@@ -46,4 +52,13 @@ export const defaultFingers: ThingToTrack[] = FINGER_NAMES.map(({ id, displayNam
   intervalDays: 1,
   overlay: makeNailOverlay(),
   photographs: [],
+  groupId: DEFAULT_ALL_FINGERS_GROUP_ID,
 }));
+
+export const defaultAllFingersGroup: ThingToTrackGroup = {
+  id: DEFAULT_ALL_FINGERS_GROUP_ID,
+  displayName: 'All Fingers',
+  reminderTime: '20:00',
+  intervalDays: 1,
+  thingIds: FINGER_NAMES.map((f) => f.id),
+};

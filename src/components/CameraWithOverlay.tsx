@@ -1,5 +1,5 @@
-import React, { useRef, useState, useCallback } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, Alert, Dimensions } from 'react-native';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { StyleSheet, View, TouchableOpacity, Text, Alert, Dimensions, AppState, type AppStateStatus } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, type CameraType, type CameraCapturedPicture } from 'expo-camera';
@@ -51,6 +51,27 @@ export default function CameraWithOverlay({
   const [sliderKey, setSliderKey] = useState(0);
   const clearFocusTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusLockTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Delay mounting the camera until app is active (fixes black screen when opening from notification).
+  const [cameraMounted, setCameraMounted] = useState(false);
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const scheduleMount = () => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => setCameraMounted(true), 200);
+    };
+    if (AppState.currentState === 'active') {
+      scheduleMount();
+    }
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') scheduleMount();
+      else setCameraMounted(false);
+    });
+    return () => {
+      sub.remove();
+      if (timeout) clearTimeout(timeout);
+    };
+  }, []);
 
   const overlayLayout = overlay
     ? (() => {
@@ -130,13 +151,17 @@ export default function CameraWithOverlay({
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <CameraView
-        ref={cameraRef}
-        style={StyleSheet.absoluteFill}
-        facing={facing}
-        autofocus={autofocus}
-        zoom={zoom}
-      />
+      {cameraMounted ? (
+        <CameraView
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          facing={facing}
+          autofocus={autofocus}
+          zoom={zoom}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} />
+      )}
 
       {/* Tap-to-focus layer: capture taps and show reticle */}
       <View

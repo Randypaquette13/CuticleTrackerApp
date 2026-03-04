@@ -66,18 +66,23 @@ export default function SettingsModal({ visible, onClose }: Props) {
               contentContainerStyle={styles.scrollContent}
             >
               {/* Early tracking window — use keyboard "Done" to confirm */}
-              <SettingRow label="Early Tracking Window (hours)">
-                <TextInput
-                  style={styles.numberInput}
-                  value={earlyHoursStr}
-                  onChangeText={setEarlyHoursStr}
-                  onSubmitEditing={confirmEarlyHours}
-                  returnKeyType="done"
-                  keyboardType="decimal-pad"
-                  maxLength={6}
-                  selectTextOnFocus
-                />
-              </SettingRow>
+              <View style={styles.settingBlock}>
+                <SettingRow label="Early Tracking Window (hours)" noBorder>
+                  <TextInput
+                    style={styles.numberInput}
+                    value={earlyHoursStr}
+                    onChangeText={setEarlyHoursStr}
+                    onSubmitEditing={confirmEarlyHours}
+                    returnKeyType="done"
+                    keyboardType="decimal-pad"
+                    maxLength={6}
+                    selectTextOnFocus
+                  />
+                </SettingRow>
+                <Text style={styles.settingDescription}>
+                  Tracking within this window will suppress the reminder notification.
+                </Text>
+              </View>
 
               {/* View grouped things */}
               <SettingRow label="Show Grouped Items on Home">
@@ -139,12 +144,14 @@ export default function SettingsModal({ visible, onClose }: Props) {
 function SettingRow({
   label,
   children,
+  noBorder,
 }: {
   label: string;
   children: React.ReactNode;
+  noBorder?: boolean;
 }) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, noBorder && styles.rowNoBorder]}>
       <Text style={styles.rowLabel}>{label}</Text>
       {children}
     </View>
@@ -186,6 +193,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 20,
   },
+  settingBlock: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a3a',
+  },
+  settingDescription: {
+    color: '#777',
+    fontSize: 12,
+    lineHeight: 18,
+    paddingHorizontal: 0,
+    paddingBottom: 12,
+    paddingTop: 0,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -194,6 +213,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#2a2a3a',
     gap: 12,
+  },
+  rowNoBorder: {
+    borderBottomWidth: 0,
+    paddingBottom: 0,
   },
   rowLabel: {
     color: '#ccc',

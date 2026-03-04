@@ -15,9 +15,11 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThingsStore, type GridItemKey } from '../src/store/thingsStore';
 import { useSettingsStore } from '../src/store/settingsStore';
 import { rescheduleAllNotifications, configureNotificationHandler } from '../src/utils/notifications';
+import { getDefaultNailOverlay, isDefaultFinger, defaultAllFingersGroup, DEFAULT_ALL_FINGERS_GROUP_ID } from '../src/data/defaultFingers';
 import ThingCard from '../src/components/ThingCard';
 import GroupCard from '../src/components/GroupCard';
 import BottomNav from '../src/components/BottomNav';
@@ -45,12 +47,56 @@ export default function HomeScreen() {
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderList, setReorderList] = useState<GridItem[]>([]);
   const allSetOpacity = useRef(new Animated.Value(0)).current;
+  const overlayResetScheduled = useRef(false);
+  const groupMigrationScheduled = useRef(false);
 
-  // Notification setup on mount
+  // One-time reset of default finger overlays to the original curve (after store rehydration).
+  useEffect(() => {
+    if (things.length === 0 || overlayResetScheduled.current) return;
+    overlayResetScheduled.current = true;
+    const t = setTimeout(async () => {
+      const done = await AsyncStorage.getItem('cuticle-tracker-overlay-reset-v1');
+      if (done) return;
+      const { things: currentThings, setOverlay } = useThingsStore.getState();
+      const defaultOverlay = getDefaultNailOverlay();
+      for (const thing of currentThings) {
+        if (isDefaultFinger(thing.id)) setOverlay(thing.id, defaultOverlay);
+      }
+      await AsyncStorage.setItem('cuticle-tracker-overlay-reset-v1', '1');
+    }, 600);
+    return () => clearTimeout(t);
+  }, [things]);
+
+  // One-time migration: add "All Fingers" group for existing users whose persisted state
+  // predates the default group. New installs already have it via the store's initial state.
+  useEffect(() => {
+    if (things.length === 0 || groupMigrationScheduled.current) return;
+    groupMigrationScheduled.current = true;
+    const t = setTimeout(async () => {
+      const done = await AsyncStorage.getItem('cuticle-tracker-all-fingers-group-v1');
+      if (done) return;
+      const { groups: currentGroups, addGroup, updateThing, things: currentThings } = useThingsStore.getState();
+      const alreadyExists = currentGroups.some((g) => g.id === DEFAULT_ALL_FINGERS_GROUP_ID);
+      if (!alreadyExists) {
+        addGroup(defaultAllFingersGroup);
+        // Ensure default fingers that don't yet have a groupId are assigned
+        for (const thing of currentThings) {
+          if (isDefaultFinger(thing.id) && thing.groupId !== DEFAULT_ALL_FINGERS_GROUP_ID) {
+            updateThing(thing.id, { groupId: DEFAULT_ALL_FINGERS_GROUP_ID });
+          }
+        }
+      }
+      await AsyncStorage.setItem('cuticle-tracker-all-fingers-group-v1', '1');
+    }, 600);
+    return () => clearTimeout(t);
+  }, [things]);
+
+  // Notification setup: run on mount and whenever things/groups/lastTracked change so we
+  // reschedule after store rehydration from AsyncStorage (initial run can have default state).
   useEffect(() => {
     configureNotificationHandler();
     rescheduleAllNotifications(things, groups, lastTracked);
-  }, []);
+  }, [things, groups, lastTracked]);
 
   // Show "All Set" banner if navigated back with flash=true
   const showAllSet = () => {
@@ -129,14 +175,72 @@ export default function HomeScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            selectedIds.forEach((key) => {
-              if (key.startsWith('group-')) deleteGroup(key.replace('group-', ''));
-              else deleteThing(key.replace(/^thing-/, ''));
-            });
-            const state = useThingsStore.getState();
-            rescheduleAllNotifications(state.things, state.groups, state.lastTracked);
-            setSelectMode(false);
-            setSelectedIds([]);
+            // Track things deleted as group members so we don't double-delete them
+            const deletedThingIds = new Set<string>();
+
+            const finishDeletion = () => {
+              selectedThingIds.forEach((tid) => {
+                if (!deletedThingIds.has(tid)) deleteThing(tid);
+              });
+              const state = useThingsStore.getState();
+              rescheduleAllNotifications(state.things, state.groups, state.lastTracked);
+              setSelectMode(false);
+              setSelectedIds([]);
+            };
+
+            // For each selected group, show a popup asking how to handle its members.
+            // Groups are processed one at a time so the user decides per-group.
+            const processNextGroup = (remaining: string[]) => {
+              if (remaining.length === 0) {
+                finishDeletion();
+                return;
+              }
+              const [groupId, ...rest] = remaining;
+              const group = groups.find((g) => g.id === groupId);
+              if (!group) {
+                processNextGroup(rest);
+                return;
+              }
+              const memberCount = group.thingIds.length;
+              Alert.alert(
+                `Delete "${group.displayName}"`,
+                memberCount > 0
+                  ? `This group has ${memberCount} member${memberCount === 1 ? '' : 's'}. Delete the group and all its members, or just the group?`
+                  : 'Delete this group?',
+                [
+                  {
+                    text: memberCount > 0 ? 'Group & Members' : 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                      group.thingIds.forEach((tid) => {
+                        deletedThingIds.add(tid);
+                        deleteThing(tid);
+                      });
+                      deleteGroup(groupId);
+                      processNextGroup(rest);
+                    },
+                  },
+                  ...(memberCount > 0
+                    ? [
+                        {
+                          text: 'Group Only',
+                          onPress: () => {
+                            deleteGroup(groupId);
+                            processNextGroup(rest);
+                          },
+                        },
+                      ]
+                    : []),
+                  {
+                    text: 'Skip',
+                    style: 'cancel' as const,
+                    onPress: () => processNextGroup(rest),
+                  },
+                ]
+              );
+            };
+
+            processNextGroup([...selectedGroupIds]);
           },
         },
       ]

@@ -13,7 +13,7 @@ export const useSettingsStore = create<SettingsState>()(
       earlyTrackingWindowHours: 2,
       viewGroupedThingsInHome: false,
       showSearchBar: true,
-      slideshowSpeedSeconds: 3,
+      slideshowSpeedSeconds: 0.4,
       slideshowShowDate: true,
       update: (updates) => set((state) => ({ ...state, ...updates })),
     }),

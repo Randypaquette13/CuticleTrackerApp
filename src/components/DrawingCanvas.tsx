@@ -1,6 +1,6 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Canvas, Path, Skia, type SkPath } from '@shopify/react-native-skia';
+import { Canvas, Path, Skia, Group, type SkPath } from '@shopify/react-native-skia';
 import { DrawStroke } from '../types';
 
 interface ActivePath {
@@ -42,13 +42,13 @@ export default function DrawingCanvas({
   const activePath = useRef<ActivePath | null>(null);
   const [, forceUpdate] = useState(0);
 
-  const scaleX = committedStrokesSourceWidth != null && committedStrokesSourceWidth > 0
+  const defaultScaleX = committedStrokesSourceWidth != null && committedStrokesSourceWidth > 0
     ? width / committedStrokesSourceWidth
     : 1;
-  const scaleY = committedStrokesSourceHeight != null && committedStrokesSourceHeight > 0
+  const defaultScaleY = committedStrokesSourceHeight != null && committedStrokesSourceHeight > 0
     ? height / committedStrokesSourceHeight
     : 1;
-  const scaleStrokes = committedStrokesSourceWidth != null && committedStrokesSourceHeight != null;
+  const hasDefaultScale = committedStrokesSourceWidth != null && committedStrokesSourceHeight != null;
 
   const handleTouchStart = useCallback(
     (e: any) => {
@@ -72,11 +72,9 @@ export default function DrawingCanvas({
 
   const handleTouchMove = useCallback((e: any) => {
     const touches = e.nativeEvent.touches;
+    // Ignore multi-touch moves here; 2-finger gestures (pinch/pan)
+    // are handled by the parent, and 1-finger should always draw.
     if (touches.length >= 2) {
-      if (activePath.current) {
-        activePath.current = null;
-        forceUpdate((n) => n + 1);
-      }
       return;
     }
     const touch = touches[0];
@@ -103,11 +101,19 @@ export default function DrawingCanvas({
     const skPath = liveSkPath ?? Skia.Path.MakeFromSVGString(stroke.path);
     if (!skPath) return null;
 
-    if (scaleStrokes && !liveSkPath) {
-      skPath.transform(Skia.Matrix().scale(scaleX, scaleY));
+    const sx = stroke.sourceWidth != null && stroke.sourceWidth > 0
+      ? width / stroke.sourceWidth
+      : hasDefaultScale && !liveSkPath ? defaultScaleX : 1;
+    const sy = stroke.sourceHeight != null && stroke.sourceHeight > 0
+      ? height / stroke.sourceHeight
+      : hasDefaultScale && !liveSkPath ? defaultScaleY : 1;
+    const scaleThisStroke = (sx !== 1 || sy !== 1) && !liveSkPath;
+
+    if (scaleThisStroke) {
+      skPath.transform(Skia.Matrix().scale(sx, sy));
     }
-    const strokeW = scaleStrokes && !liveSkPath
-      ? stroke.strokeWidth * Math.min(scaleX, scaleY)
+    const strokeW = scaleThisStroke
+      ? stroke.strokeWidth * Math.min(sx, sy)
       : stroke.strokeWidth;
 
     if (stroke.isEraser) {
@@ -137,6 +143,16 @@ export default function DrawingCanvas({
     );
   };
 
+  const { drawStrokes, eraserStrokes } = useMemo(() => {
+    const draw: DrawStroke[] = [];
+    const erase: DrawStroke[] = [];
+    for (const s of committedStrokes) {
+      if (s.isEraser) erase.push(s);
+      else draw.push(s);
+    }
+    return { drawStrokes: draw, eraserStrokes: erase };
+  }, [committedStrokes]);
+
   return (
     <View
       style={[styles.container, { width, height }]}
@@ -147,18 +163,38 @@ export default function DrawingCanvas({
     >
       <View style={styles.canvasPassThrough} pointerEvents="none">
         <Canvas style={StyleSheet.absoluteFill}>
-          {committedStrokes.map((s) => renderStroke(s))}
+          <Group layer>
+            {drawStrokes.map((s) => renderStroke(s))}
+          </Group>
+          <Group layer blendMode="dstOut">
+            {eraserStrokes.map((s) => renderStroke(s))}
+          </Group>
           {activePath.current &&
-            renderStroke(
-              {
-                id: 'live',
-                path: '',
-                color: activePath.current.color,
-                strokeWidth: activePath.current.strokeWidth,
-                isEraser: activePath.current.isEraser,
-              },
-              activePath.current.skPath
-            )}
+            (activePath.current.isEraser ? (
+              <Group blendMode="dstOut">
+                {renderStroke(
+                  {
+                    id: 'live',
+                    path: '',
+                    color: activePath.current.color,
+                    strokeWidth: activePath.current.strokeWidth,
+                    isEraser: true,
+                  },
+                  activePath.current.skPath
+                )}
+              </Group>
+            ) : (
+              renderStroke(
+                {
+                  id: 'live',
+                  path: '',
+                  color: activePath.current.color,
+                  strokeWidth: activePath.current.strokeWidth,
+                  isEraser: false,
+                },
+                activePath.current.skPath
+              )
+            ))}
         </Canvas>
       </View>
     </View>

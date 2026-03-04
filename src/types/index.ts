@@ -11,6 +11,9 @@ export interface DrawStroke {
   color: string;
   strokeWidth: number;
   isEraser: boolean;
+  /** Canvas size this stroke was drawn in (for correct scaling when canvas size changes). Omit = current canvas. */
+  sourceWidth?: number;
+  sourceHeight?: number;
 }
 
 export interface DrawingOverlay {

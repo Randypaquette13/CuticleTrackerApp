@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.cuticletracker.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Cuticle Tracker uses your camera to photograph your fingernails for tracking.",
         "NSPhotoLibraryUsageDescription": "Cuticle Tracker saves photos of your fingernails to your library."
@@ -28,7 +29,9 @@
       "package": "com.cuticletracker.app",
       "permissions": [
         "CAMERA",
-        "NOTIFICATIONS"
+        "NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -49,6 +52,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "81a3a893-c446-46b4-a9af-3c7bccfa37ec"
+      }
     }
   }
 }

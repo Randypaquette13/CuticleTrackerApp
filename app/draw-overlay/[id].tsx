@@ -5,12 +5,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  ScrollView,
   Image,
   Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -18,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useThingsStore } from '../../src/store/thingsStore';
 import { isDefaultFinger } from '../../src/data/defaultFingers';
+import { deletePhoto } from '../../src/utils/photos';
 import DrawingCanvas from '../../src/components/DrawingCanvas';
 import ColorWheelPicker from '../../src/components/ColorWheelPicker';
 import { DrawStroke } from '../../src/types';
@@ -25,7 +25,7 @@ import { DrawStroke } from '../../src/types';
 const STROKE_WIDTHS = [2, 4, 8, 14, 22];
 const DEFAULT_CANVAS_SIZE = 300;
 const MIN_SCALE = 0.5;
-const MAX_SCALE = 4;
+const MAX_SCALE = 12;
 
 /**
  * Fit (width, height) inside container preserving aspect ratio.
@@ -71,13 +71,19 @@ export default function DrawOverlayScreen() {
   const id = typeof params.id === 'string' ? params.id : params.id?.[0] ?? '';
   const fromNewTracker = typeof params.fromNewTracker === 'string' ? params.fromNewTracker : params.fromNewTracker?.[0];
   const router = useRouter();
-  const { things, setOverlay } = useThingsStore();
+  const { things, setOverlay, updateThing } = useThingsStore();
   const thing = things.find((t) => t.id === id);
   const cannotEdit = id !== '' && isDefaultFinger(id);
 
-  const [strokes, setStrokes] = useState<DrawStroke[]>(
-    thing?.overlay?.strokes ?? []
-  );
+  const [strokes, setStrokes] = useState<DrawStroke[]>(() => {
+    const list = thing?.overlay?.strokes ?? [];
+    const cw = thing?.overlay?.canvasWidth;
+    const ch = thing?.overlay?.canvasHeight;
+    if (cw != null && ch != null) {
+      return list.map((s) => ({ ...s, sourceWidth: cw, sourceHeight: ch }));
+    }
+    return list;
+  });
   const [color, setColor] = useState('#FFFFFF');
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [isEraser, setIsEraser] = useState(false);
@@ -106,10 +112,19 @@ export default function DrawOverlayScreen() {
     );
   }, [backgroundPhoto]);
 
+  const existingOverlay = thing?.overlay;
+
   const contentSize = (() => {
+    if (existingOverlay) {
+      return {
+        width: existingOverlay.canvasWidth,
+        height: existingOverlay.canvasHeight,
+      };
+    }
     const win = Dimensions.get('window');
-    const maxW = win.width - 32;
-    const maxH = Math.max(400, win.height * 0.5);
+    const padding = 32;
+    const maxW = win.width - padding;
+    const maxH = win.height - 200;
     if (containerLayout) {
       const { width: cw, height: ch } = containerLayout;
       if (imageDimensions) {
@@ -133,6 +148,14 @@ export default function DrawOverlayScreen() {
     }
     return { width: Math.min(maxW, DEFAULT_CANVAS_SIZE), height: Math.min(maxH, DEFAULT_CANVAS_SIZE) };
   })();
+
+  const baseScale =
+    existingOverlay && containerLayout
+      ? Math.min(
+          containerLayout.width / contentSize.width,
+          containerLayout.height / contentSize.height
+        )
+      : 1;
 
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -163,17 +186,23 @@ export default function DrawOverlayScreen() {
 
   const composed = Gesture.Simultaneous(pinchGesture, panGesture);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }));
+  const animatedStyle = useAnimatedStyle(
+    () => ({
+      transform: [
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+        { scale: baseScale * scale.value },
+      ],
+    }),
+    [baseScale]
+  );
 
   const handleStrokeComplete = useCallback((stroke: DrawStroke) => {
-    setStrokes((prev) => [...prev, stroke]);
-  }, []);
+    setStrokes((prev) => [
+      ...prev,
+      { ...stroke, sourceWidth: contentSize.width, sourceHeight: contentSize.height },
+    ]);
+  }, [contentSize.width, contentSize.height]);
 
   const handleClearAll = () => {
     Alert.alert('Clear All', 'Remove all drawn lines?', [
@@ -192,7 +221,7 @@ export default function DrawOverlayScreen() {
 
   const handleSave = () => {
     setOverlay(id, {
-      strokes,
+      strokes: strokes.map(({ sourceWidth, sourceHeight, ...s }) => s),
       canvasWidth: contentSize.width,
       canvasHeight: contentSize.height,
     });
@@ -203,9 +232,18 @@ export default function DrawOverlayScreen() {
     }
   };
 
-  const existingOverlay = thing?.overlay;
+  const handleCancel = async () => {
+    if (fromNewTracker === 'true' && thing?.photographs?.length) {
+      const lastPhoto = thing.photographs[thing.photographs.length - 1];
+      await deletePhoto(lastPhoto.uri);
+      updateThing(id, { photographs: [] });
+    }
+    router.back();
+  };
+
   const committedSourceWidth = existingOverlay?.canvasWidth;
   const committedSourceHeight = existingOverlay?.canvasHeight;
+  const insets = useSafeAreaInsets();
 
   if (cannotEdit) {
     return (
@@ -230,10 +268,10 @@ export default function DrawOverlayScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+          <TouchableOpacity onPress={handleCancel} style={styles.headerBtn}>
             <Text style={styles.headerBtnText}>Cancel</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
@@ -244,7 +282,7 @@ export default function DrawOverlayScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
+        <View style={[styles.canvasScroll, styles.scrollContent]}>
           {/* Zoomable/pannable canvas area: full image with pinch and 2-finger pan */}
           <View
             style={styles.canvasArea}
@@ -290,9 +328,10 @@ export default function DrawOverlayScreen() {
               </Animated.View>
             </GestureDetector>
           </View>
+        </View>
 
-          {/* Toolbar */}
-          <View style={styles.toolbar}>
+        {/* Toolbar fixed at bottom */}
+        <View style={[styles.toolbar, { paddingBottom: insets.bottom + 16 }]}>
             {/* Tool toggles */}
             <View style={styles.toolRow}>
               <TouchableOpacity
@@ -370,7 +409,6 @@ export default function DrawOverlayScreen() {
               </View>
             )}
           </View>
-        </ScrollView>
       </SafeAreaView>
   );
 }
@@ -407,14 +445,18 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
   },
+  canvasScroll: {
+    flex: 1,
+  },
   scrollContent: {
+    flexGrow: 1,
     alignItems: 'center',
     paddingVertical: 20,
     paddingHorizontal: 16,
-    gap: 20,
   },
   canvasArea: {
     width: '100%',
+    flex: 1,
     minHeight: 280,
     marginBottom: 8,
   },
@@ -435,6 +477,11 @@ const styles = StyleSheet.create({
   toolbar: {
     width: '100%',
     gap: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    backgroundColor: '#0f0f1a',
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a3a',
   },
   toolRow: {
     flexDirection: 'row',

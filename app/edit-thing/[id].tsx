@@ -137,29 +137,25 @@ export default function EditThingScreen() {
             <Text style={styles.label}>Overlay Preview</Text>
             <View style={styles.overlayPreviewWrapper}>
               {thing.overlay ? (() => {
-                const ow = thing.overlay.canvasWidth;
-                const oh = thing.overlay.canvasHeight;
-                const aspect = ow / (oh || 1);
-                const max = 280;
-                const previewW = aspect >= 1 ? max : max * aspect;
-                const previewH = aspect >= 1 ? max / aspect : max;
+                const PREVIEW = 280;
                 const photoUri = thing.photographs.at(-1)?.uri;
                 return (
-                  <View style={[styles.overlayPreview, { width: previewW, height: previewH }]}>
+                  <View style={[styles.overlayPreview, { width: PREVIEW, height: PREVIEW }]}>
                     {photoUri ? (
                       <Image
                         source={{ uri: photoUri }}
                         style={StyleSheet.absoluteFill}
-                        resizeMode="contain"
+                        resizeMode="cover"
                       />
                     ) : (
                       <View style={[StyleSheet.absoluteFill, styles.overlayPreviewBg]} />
                     )}
                     <OverlayView
                       overlay={thing.overlay}
-                      width={previewW}
-                      height={previewH}
+                      width={PREVIEW}
+                      height={PREVIEW}
                       opacity={0.8}
+                      centerCrop
                     />
                   </View>
                 );

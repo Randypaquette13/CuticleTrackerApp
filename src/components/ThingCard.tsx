@@ -32,9 +32,24 @@ export default function ThingCard({
   onLongPress,
 }: Props) {
   const router = useRouter();
-  const { lastTracked } = useThingsStore();
+  const { lastTracked, deleteThing } = useThingsStore();
 
   const daysLeft = daysUntilNext(thing.reminderTime, thing.intervalDays, lastTracked[thing.id]);
+
+  const handleDeleteThing = () => {
+    Alert.alert(
+      'Delete Tracker',
+      `Delete "${thing.displayName}" and all its photos?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteThing(thing.id),
+        },
+      ]
+    );
+  };
 
   const handlePress = () => {
     if (isSelectMode) {
@@ -42,18 +57,23 @@ export default function ThingCard({
       return;
     }
 
-    const options = ['Track', 'View Slideshow', 'Edit', 'Cancel'];
+    const options = ['Track', 'View Slideshow', 'Edit', 'Delete', 'Cancel'];
+    const cancelIndex = 4;
+    const destructiveIndex = 3;
+
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
           options,
-          cancelButtonIndex: 3,
+          cancelButtonIndex: cancelIndex,
+          destructiveButtonIndex: destructiveIndex,
           title: thing.displayName,
         },
         (idx) => {
           if (idx === 0) router.push(`/track-thing/${thing.id}`);
           else if (idx === 1) router.push(`/slideshow/${thing.id}`);
           else if (idx === 2) router.push(`/edit-thing/${thing.id}`);
+          else if (idx === 3) handleDeleteThing();
         }
       );
     } else {
@@ -61,6 +81,7 @@ export default function ThingCard({
         { text: 'Track', onPress: () => router.push(`/track-thing/${thing.id}`) },
         { text: 'View Slideshow', onPress: () => router.push(`/slideshow/${thing.id}`) },
         { text: 'Edit', onPress: () => router.push(`/edit-thing/${thing.id}`) },
+        { text: 'Delete', onPress: handleDeleteThing, style: 'destructive' as const },
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
@@ -85,6 +106,7 @@ export default function ThingCard({
             width={CARD_SIZE - 24}
             height={CARD_SIZE - 56}
             opacity={0.7}
+            centerCrop
           />
         ) : (
           <View style={styles.noOverlay}>
@@ -93,17 +115,17 @@ export default function ThingCard({
         )}
       </View>
 
-      {/* Name */}
-      <Text style={styles.name} numberOfLines={1}>
-        {thing.displayName}
-      </Text>
-
-      {/* "Next in X Days" badge */}
+      {/* "Next in X Days" badge — just above title */}
       {thing.intervalDays > 1 && daysLeft > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>Next in {daysLeft}d</Text>
         </View>
       )}
+
+      {/* Name */}
+      <Text style={styles.name} numberOfLines={1}>
+        {thing.displayName}
+      </Text>
 
       {/* Select mode checkbox */}
       {isSelectMode && (
@@ -162,9 +184,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   badge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
+    marginBottom: 2,
     backgroundColor: '#7c3aed88',
     borderRadius: 8,
     paddingHorizontal: 6,

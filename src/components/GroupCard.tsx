@@ -83,7 +83,7 @@ export default function GroupCard({
       activeOpacity={0.75}
     >
       {/* Mini overlay grid */}
-      <View style={styles.miniGrid}>
+      <View style={[styles.miniGrid]}>
         {displayMembers.map((member) => (
           <View key={member.id} style={styles.miniOverlayWrapper}>
             {member.overlay ? (
@@ -92,6 +92,7 @@ export default function GroupCard({
                 width={MINI_OVERLAY_SIZE}
                 height={MINI_OVERLAY_SIZE}
                 opacity={0.65}
+                centerCrop
               />
             ) : (
               <View style={styles.miniPlaceholder} />
@@ -108,16 +109,20 @@ export default function GroupCard({
         )}
       </View>
 
+      {group.intervalDays > 1 && daysLeft > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>Next in {daysLeft} days</Text>
+        </View>
+      )}
+
       <Text style={styles.name} numberOfLines={1}>
         {group.displayName}
       </Text>
-      <Text style={styles.count}>{members.length} fingers</Text>
-
-      {group.intervalDays > 1 && daysLeft > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>Next in {daysLeft}d</Text>
-        </View>
-      )}
+      <Text style={styles.count}>
+        {group.displayName === 'All Fingers'
+          ? `${members.length} finger${members.length === 1 ? '' : 's'}`
+          : `${members.length} tracked`}
+      </Text>
 
       {isSelectMode && (
         <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
@@ -198,9 +203,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   badge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
+    marginBottom: 2,
     backgroundColor: '#7c3aed88',
     borderRadius: 8,
     paddingHorizontal: 6,
